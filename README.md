@@ -1,5 +1,8 @@
 # Where Would HMS Belfast Hit Right Now?
 
+[![CI](https://github.com/SilentKinfolk/where-would-hms-belfast-hit/actions/workflows/ci.yml/badge.svg)](https://github.com/SilentKinfolk/where-would-hms-belfast-hit/actions/workflows/ci.yml)
+[![Deploy](https://github.com/SilentKinfolk/where-would-hms-belfast-hit/actions/workflows/deploy.yml/badge.svg)](https://github.com/SilentKinfolk/where-would-hms-belfast-hit/actions/workflows/deploy.yml)
+
 A ballistic calculator for the 6-inch guns of
 [HMS Belfast](https://en.wikipedia.org/wiki/HMS_Belfast), the WWII cruiser moored
 in the Pool of London. The forward turrets have pointed at the **London Gateway

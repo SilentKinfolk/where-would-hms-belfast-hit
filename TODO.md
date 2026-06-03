@@ -21,5 +21,3 @@
 - Deploy `describe.mjs` as a serverless function so the AI one-liner works on
   the public site.
 
-## Tests
-- Unit tests for `geo.js` and the calibration.
