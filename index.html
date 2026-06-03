@@ -130,15 +130,13 @@
       Weather &amp; tide: <a href="https://open-meteo.com/">Open-Meteo</a> /
       <a href="https://environment.data.gov.uk/flood-monitoring/doc/reference">Environment Agency</a> ·
       Map &amp; places: <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> ·
-      <a href="https://github.com/SilentKinfolk/where-would-hms-belfast-hit">Source on GitHub</a> ·
-      <span id="visits-count">…</span> visits
-      <br />
-      <img
-        class="visits-badge"
-        src="https://silentkinfolk.goatcounter.com/counter/TOTAL.svg?no_branding"
-        alt="Page views"
-        loading="lazy"
-      />
+      <a href="https://github.com/SilentKinfolk/where-would-hms-belfast-hit">Source on GitHub</a>
+      <p class="visits">
+        <span class="counter" id="visits-count" aria-label="visit counter">
+          <span class="digit">·</span><span class="digit">·</span><span class="digit">·</span><span class="digit">·</span><span class="digit">·</span><span class="digit">·</span>
+        </span>
+        <span class="visits-label">visits</span>
+      </p>
     </footer>
 
     <script type="module" src="/src/main.js"></script>
@@ -154,7 +152,11 @@
         .then((r) => r.json())
         .then((d) => {
           const el = document.getElementById('visits-count');
-          if (el && d?.count) el.textContent = d.count;
+          if (!el || d?.count == null) return;
+          const digits = String(d.count).padStart(6, '0');
+          el.innerHTML = [...digits]
+            .map((c) => `<span class="digit">${c}</span>`)
+            .join('');
         })
         .catch(() => {});
     </script>

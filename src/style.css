@@ -311,10 +311,42 @@ summary:hover {
   color: #777;
 }
 
-.visits-badge {
+/* Plain old-school site hit counter: each digit framed in its own black tile,
+   padded with leading zeros. Pure HTML + CSS — populated by the inline script
+   in index.html. */
+.visits {
+  margin: 14px 0 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+}
+
+.counter {
+  display: inline-flex;
+  gap: 1px;
+  padding: 2px;
+  background: #111;
+  border: 1px solid #000;
+  box-shadow: inset 0 0 0 1px #333;
+}
+
+.counter .digit {
   display: inline-block;
-  margin-top: 10px;
-  max-height: 56px;
-  filter: grayscale(1);
-  opacity: 0.85;
+  min-width: 14px;
+  padding: 3px 4px;
+  background: #1a1a1a;
+  color: #f5f5f5;
+  font-family: ui-monospace, 'Courier New', Courier, monospace;
+  font-weight: bold;
+  font-size: 0.95rem;
+  line-height: 1;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.visits-label {
+  font-size: 0.75rem;
+  color: #999;
+  letter-spacing: 0.04em;
 }
