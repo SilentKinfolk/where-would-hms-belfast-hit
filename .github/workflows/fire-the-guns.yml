@@ -33,12 +33,14 @@ jobs:
       # ANTHROPIC_API_KEY is a repo secret (Settings → Secrets and variables →
       # Actions). It's only exposed to this step. GH Actions masks the value
       # in logs (shown as ***), and forked-PR workflows don't get secrets.
-      # DESCRIBE_MODEL picks Haiku 4.5 for cost (~$0.004/call, ~$6/month);
-      # flip to claude-opus-4-8 if Haiku's map reading isn't crisp enough.
+      # DESCRIBE_MODEL picks Sonnet 4.6 for sharper map-label reading. Dedupe
+      # in enrich-impact.mjs skips the call on ticks where the impact barely
+      # moved, so the per-month spend stays modest. Drop to claude-haiku-4-5
+      # if line quality stops mattering and cost does.
       - run: npm run log-impact
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          DESCRIBE_MODEL: claude-haiku-4-5
+          DESCRIBE_MODEL: claude-sonnet-4-6
 
       # The browser fetches public/impacts.json straight from raw.githubusercontent.com
       # — no Pages redeploy required, just commit + push. (deploy.yml ignores

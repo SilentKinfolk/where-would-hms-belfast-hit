@@ -23,7 +23,7 @@ import { buildLabel } from '../src/describe.js';
 const NOMINATIM_UA =
   'belfast-ballistics/1.0 (https://github.com/SilentKinfolk/where-would-hms-belfast-hit)';
 
-const MODEL = process.env.DESCRIBE_MODEL || 'claude-haiku-4-5';
+const MODEL = process.env.DESCRIBE_MODEL || 'claude-sonnet-4-6';
 
 // Slack past the prior CEP edge before a new Claude call is worth it. The
 // rendered map shifts very little within this window, so the tail Claude wrote
