@@ -16,7 +16,7 @@
       <div class="answer" id="ans-place">…</div>
       <p class="sub" id="ans-sub">working it out…</p>
       <p class="cond">
-        <span id="ans-cond-text">fetching live conditions…</span>
+        <span id="ans-cond-text">fetching conditions…</span>
         <span id="status" class="status"></span>
         <button id="refresh-btn" class="refresh" title="Refresh now">↻ refresh</button>
       </p>
@@ -33,27 +33,23 @@
 
       <div class="prose" id="how-prose" hidden>
         <p>
-          Belfast's forward turrets are fixed, pointed at the London Gateway
-          services 18.7&nbsp;km away. This page works out where a shell fired
-          from that laying would land in <em>today's</em> weather.
+          HMS Belfast is famously said to have its guns pointed to hit London Gateway
+          services, 18.7&nbsp;km away. But, I wanted to see how correct that fact is given real ballistic simulation,
+          so this page works out where a shell fired by HMS Belfast would land, given current atmospheric conditions.
         </p>
         <p>
-          A point-mass ballistics engine flies the shell, with drag tuned to
-          Belfast's own range tables. Live wind at every altitude, air density, Earth
-          curvature, Coriolis, spin drift and the Thames tide all bend the arc.
+          A point-mass ballistics engine simulates the shell, with drag tuned to
+          HMS Belfast's own range tables. Real wind data at every altitude of the ballistic arc, air density, Earth
+          curvature, Coriolis, spin drift and the Thames tide height, are all fed into the simulation.
           The output is one likely impact point and a Circular Error Probable:
-          how tightly the shells would group, given gun scatter and forecast
+          How tightly the shells would group, given gun scatter and forecast
           uncertainty.
         </p>
         <p>
-          The aim is assumed and several inputs are estimates, but the physics
-          matches the range tables to within ~2%. Numbers below the map.
-        </p>
-        <p>
-          The place name comes from OpenStreetMap, and a Claude vision model
-          reads the rendered impact map to add the casual one-liner. Both are
-          baked into the page every 30 minutes by a scheduled job, not
-          computed per visitor.
+          A combination of OpenStreetMap data, and a Claude vision model
+          that reads the rendered impact map describes where HMS Belfast would hit.
+          The ballistic simulation is re-ran every 30 minutes, with previous simulations available to display,
+          to see how the predicted impact location changes as atmospheric conditions change.
         </p>
       </div>
     </section>
@@ -124,7 +120,7 @@
     </section>
 
     <footer class="credits">
-      Educational toy — uses many approximations, not a real fire-control solution.
+      This site is just a bit of fun, and uses approximations, it's not a real fire-control solution.
       Gun &amp; range tables: <a href="http://www.navweaps.com/Weapons/WNBR_6-50_mk23.php">NavWeaps</a> ·
       Ballistics: <a href="https://github.com/o-murphy/js-ballistics">js-ballistics</a> ·
       Weather &amp; tide: <a href="https://open-meteo.com/">Open-Meteo</a> /
