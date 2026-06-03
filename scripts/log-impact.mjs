@@ -92,9 +92,10 @@ async function main() {
     throw new Error('No live conditions in result — refusing to log.');
   }
 
-  await enrichImpact(result);
-
+  // Load existing first so enrichImpact() can reuse the prior tick's AI line
+  // when the new impact has barely moved (saves a Claude call).
   const existing = await loadExisting();
+  await enrichImpact(result, existing.latest);
 
   // Don't double-log if the previous tick is too fresh (safety against rapid manual triggers).
   if (

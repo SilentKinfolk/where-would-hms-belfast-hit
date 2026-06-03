@@ -12,9 +12,3 @@
 - "As it literally sits" mode using the museum barrel angles.
 - Per-turret / salvo patterns.
 
-## Cron / cost
-- Reuse the previous tick's AI line when the new impact sits inside the last
-  tick's CEP (or within ~100 m). The map a vision model would see is the same,
-  so the line still describes it. Saves ~$0.004 per duplicate Haiku call.
-  Keep the Nominatim place refresh either way (free, surfaces edge moves).
-

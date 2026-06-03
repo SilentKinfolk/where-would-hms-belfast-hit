@@ -4,17 +4,20 @@
 //
 // Mutates `result` in place:
 //   result.place        — Nominatim label object (same shape as src/describe.js)
-//   result.description  — one-line Claude vision string
+//   result.description  — one-line string: `${place.place}, ${tail}.`
+//                         The Nominatim name grounds the proper noun; Claude
+//                         only writes the casual locator aside, which is
+//                         concatenated here. Locality is dropped.
 //
-// Both calls are best-effort. If either fails (no key, Nominatim down, model
-// error, no ellipse to render) the field is just left unset; the cron still
-// commits the engine result and main.js falls back to a client-side Nominatim
-// lookup for `place`.
+// When `prevLatest` is supplied AND the new impact sits within REUSE_EDGE_BUFFER_M
+// of the prior CEP edge AND Nominatim returned the same `place.place`, the
+// prior description is reused verbatim — no Claude call. Saves ~$0.004/tick
+// on duplicate Haiku renders.
 
 import Anthropic from '@anthropic-ai/sdk';
 import StaticMaps from 'staticmaps';
 
-import { destinationPoint } from '../src/geo.js';
+import { destinationPoint, distanceMeters } from '../src/geo.js';
 import { buildLabel } from '../src/describe.js';
 
 const NOMINATIM_UA =
@@ -22,27 +25,37 @@ const NOMINATIM_UA =
 
 const MODEL = process.env.DESCRIBE_MODEL || 'claude-haiku-4-5';
 
-// Same prompt the local proxy uses (server/describe.mjs). Kept in sync by
-// re-pasting if it changes there — small enough not to be worth a third file.
-const SYSTEM = `You describe where a naval shell would land, for a tongue-in-cheek website.
+// Slack past the prior CEP edge before a new Claude call is worth it. The
+// rendered map shifts very little within this window, so the tail Claude wrote
+// last tick still describes the spot under the dot.
+const REUSE_EDGE_BUFFER_M = 50;
 
-You are shown a map image with a red dot marking the most likely impact point, sat inside a red ellipse showing the spread (how far off it might be).
+// Tail-only prompt. The proper noun is pinned by Nominatim and concatenated as
+// a prefix here; the model's only job is the casual locator aside.
+const SYSTEM = `You complete a one-liner about where a naval shell would land, for a tongue-in-cheek website.
 
-Read the place names and labels on the map and reply with ONE short, casual line saying where it comes down, the way someone glancing at the map would say it out loud.
+You are given a fixed place-name prefix (from OpenStreetMap), AND a map image with a red dot marking the most likely impact, sat inside a red ellipse showing the spread.
+
+The final published line will read: "{prefix}, {your fragment}."
+
+Your job is to write JUST the fragment.
 
 Rules:
-- Describe the spot under the red dot. You may use the ellipse for a light "give or take" aside.
-- Always include a proper-noun place name (Mill Hill Golf Course, A1, Hampstead Heath, Sainsbury's, Tesco Extra, the Brent Reservoir). Generic descriptors like "the fairway", "the road", "a field", "the park" do NOT count on their own. Pair the proper noun with the most specific nearby feature you can see (a hole number, a side road, a named wood, a junction, a pond, an aisle, the bandstand). Both halves must be in the line. Never the feature alone without the named place.
-- Use only names and labels actually visible on the map. Never invent a road, hole, or place that is not shown. If little is labelled, stay vaguer: name the neighbourhood or town from the map, plus whatever you can see.
-- One line, 12 words max. Casual spoken register. A light throwaway aside about the place itself is welcome (e.g. "give or take an aisle"). No commentary about consequences, traffic, or what happens next. Never a set-up and punchline joke.
-- Commas and full stops only. No dashes of any kind. No emoji, no quote marks.
+- Output a fragment of 3 to 8 words. No leading or trailing punctuation. Do NOT repeat the prefix.
+- Start with a comma-natural opener like "somewhere", "just past", "near", "round about", "give or take", "over by", "back of".
+- Ground the fragment in something visible on the map near the red dot: a hole number, a side road, a pond, a wood, a junction, a building, an aisle, a roundabout. Never invent a feature that is not shown.
+- If little is labelled near the dot, stay vague (e.g. "give or take a fairway", "round the back somewhere", "near the trees").
+- Casual spoken register. No commentary about consequences, traffic, or what happens next. Never a set-up and punchline joke.
+- Commas only inside the fragment. No dashes of any kind. No emoji, no quote marks.
 
-Output only the single line. No preamble, no explanation.
+Output only the fragment. No preamble, no explanation.
 
-Tone and shape to match (do not reuse these places):
-Sainsbury's car park in Witney, give or take an aisle.
-Middle of Hampstead Heath, somewhere near the ponds.
-The A41 outside Berkhamsted, just past the petrol station.`;
+Examples of just the fragment (do not reuse):
+give or take an aisle
+somewhere near the ponds
+just past the petrol station
+round about the 13th
+back of the bandstand`;
 
 function ellipseRing(center, ellipse, steps = 40) {
   const ring = [];
@@ -89,14 +102,13 @@ async function renderCepMap(center, ring) {
 }
 
 function buildUserText(placeLabel) {
-  if (!placeLabel) return 'Where does it land?';
-  return `Where does it land?\n\nOpenStreetMap labels the impact point as "${placeLabel}". Use this name (or a natural variant) as the proper-noun half of your line, unless the map clearly shows a more specific named place at the red dot.`;
+  return `Place-name prefix: "${placeLabel}".\n\nWrite the fragment.`;
 }
 
-async function describeCep(client, pngBuffer, placeLabel) {
+async function describeTail(client, pngBuffer, placeLabel) {
   const resp = await client.messages.create({
     model: MODEL,
-    max_tokens: 120,
+    max_tokens: 60,
     thinking: { type: 'disabled' },
     system: [{ type: 'text', text: SYSTEM, cache_control: { type: 'ephemeral' } }],
     messages: [
@@ -129,7 +141,35 @@ async function fetchPlace(lat, lon) {
   return buildLabel(await res.json());
 }
 
-export async function enrichImpact(result) {
+// Reuse the prior tick's description verbatim when the new impact has barely
+// moved AND the Nominatim place hasn't flipped. Both conditions matter: a 30 m
+// drift across a road boundary changes the proper noun even if the map looks
+// almost identical, and the cached prefix would then be wrong.
+function canReuseDescription(result, prev) {
+  if (!prev?.description || !prev?.place || !result.place) return false;
+  if (result.place.place !== prev.place.place) return false;
+  if (!Number.isFinite(prev.cepM)) return false;
+  const d = distanceMeters(
+    { lat: result.impact.lat, lon: result.impact.lon },
+    { lat: prev.impact.lat, lon: prev.impact.lon }
+  );
+  return d <= prev.cepM + REUSE_EDGE_BUFFER_M;
+}
+
+// Defensive: if the model echoed the prefix or added punctuation, strip it so
+// the concatenation comes out clean.
+function cleanTail(raw, placeLabel) {
+  let t = raw.trim();
+  const pfx = placeLabel.toLowerCase();
+  if (t.toLowerCase().startsWith(pfx)) t = t.slice(pfx.length);
+  t = t.replace(/^[\s,.;:!?\-–—]+/, '');
+  t = t.replace(/[.\s]+$/, '');
+  return t;
+}
+
+export async function enrichImpact(result, prevLatest = null) {
+  // Always refresh the place name. Free, surfaces edge moves even on ticks
+  // where the description gets reused.
   try {
     const place = await fetchPlace(result.impact.lat, result.impact.lon);
     if (place) {
@@ -142,8 +182,28 @@ export async function enrichImpact(result) {
     console.warn('Place lookup failed:', err.message);
   }
 
+  if (canReuseDescription(result, prevLatest)) {
+    result.description = prevLatest.description;
+    const d = Math.round(
+      distanceMeters(
+        { lat: result.impact.lat, lon: result.impact.lon },
+        { lat: prevLatest.impact.lat, lon: prevLatest.impact.lon }
+      )
+    );
+    console.log(
+      `Reusing previous description (impact moved ${d} m, within prev CEP ${Math.round(
+        prevLatest.cepM
+      )} m + ${REUSE_EDGE_BUFFER_M} m): "${result.description}"`
+    );
+    return;
+  }
+
   if (!process.env.ANTHROPIC_API_KEY) {
     console.log('No ANTHROPIC_API_KEY set — skipping AI description.');
+    return;
+  }
+  if (!result.place) {
+    console.log('No Nominatim place — skipping AI description.');
     return;
   }
   if (!result.ellipse) {
@@ -156,13 +216,16 @@ export async function enrichImpact(result) {
     const center = { lat: result.impact.lat, lon: result.impact.lon };
     const ring = ellipseRing(center, result.ellipse);
     const png = await renderCepMap(center, ring);
-    const placeLabel = result.place
-      ? [result.place.place, result.place.locality].filter(Boolean).join(', ')
-      : null;
-    const description = await describeCep(client, png, placeLabel);
-    if (description) {
-      result.description = description;
-      console.log(`Description (${MODEL}): ${description}`);
+    const placeLabel = result.place.place;
+    const rawTail = await describeTail(client, png, placeLabel);
+    if (rawTail) {
+      const tail = cleanTail(rawTail, placeLabel);
+      if (tail) {
+        result.description = `${placeLabel}, ${tail}.`;
+        console.log(`Description (${MODEL}): ${result.description}`);
+      } else {
+        console.warn(`Claude tail cleaned to empty (raw: "${rawTail}") — skipping.`);
+      }
     } else {
       console.warn('Claude returned no text block.');
     }
