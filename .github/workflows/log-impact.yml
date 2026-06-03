@@ -6,7 +6,9 @@ name: Log impact
 
 on:
   schedule:
-    - cron: '*/30 * * * *'
+    # Off-hour minutes (7 and 37) to dodge the on-the-hour stampede that gets
+    # GH Actions scheduled runs deprioritised and routinely delayed/skipped.
+    - cron: '7,37 * * * *'
   workflow_dispatch:
 
 permissions:
