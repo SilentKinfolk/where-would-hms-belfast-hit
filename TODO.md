@@ -18,6 +18,8 @@
 
 ## Site
 - Shareable links (URL-encode conditions).
-- Deploy `describe.mjs` as a serverless function so the AI one-liner works on
-  the public site.
+- Wire the Claude vision describer (`server/describe.mjs`) into
+  `scripts/log-impact.mjs` so the cron pre-renders the AI one-liner into each
+  `latest` entry. Fixed cost (~$6/mo with Haiku 4.5), decoupled from traffic.
+  `ANTHROPIC_API_KEY` goes in GH Actions secrets.
 

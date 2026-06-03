@@ -1,7 +1,10 @@
-// Append a single live-weather impact estimate to public/impacts.json.
-// Run by .github/workflows/log-impact.yml on a cron; uses the same engine and
-// data sources as the browser, so the shared ghost trail looks identical to
-// what a visitor's localStorage used to accumulate.
+// Pre-render the live answer + ghost trail server-side.
+//
+// Run by .github/workflows/log-impact.yml every 30 min. Writes public/impacts.json
+// as { latest, history }: `latest` is the full ImpactResult the site renders
+// verbatim (no in-browser compute on the critical path); `history` is the
+// compact ghost trail. On each tick the previous `latest` is demoted into
+// `history`, then a new `latest` is computed.
 //
 // Local dry-run:   node scripts/log-impact.mjs
 
@@ -14,12 +17,12 @@ import { BELFAST, TARGET } from '../src/data/belfast.js';
 
 const IMPACTS_PATH = fileURLToPath(new URL('../public/impacts.json', import.meta.url));
 
-const MAX_ENTRIES = 1500; // ~30 days at 30-min cadence (1440 max), with slack
+const MAX_ENTRIES = 1500; // ~30 days at 30-min cadence (1440), with slack
 const MAX_AGE_MS = 30 * 24 * 3600 * 1000;
 const MIN_GAP_MS = 60 * 1000; // dedup if two runs land within a minute
 
-// Same compact shape src/history.js used in localStorage — just enough to redraw.
-function buildEntry(result) {
+// Compact form for the ghost trail — just enough to redraw the point + ellipse.
+function compactEntry(result) {
   return {
     t: result.computedAt,
     lat: result.impact.lat,
@@ -47,19 +50,32 @@ function buildEntry(result) {
 async function loadExisting() {
   try {
     const raw = await readFile(IMPACTS_PATH, 'utf8');
-    const arr = JSON.parse(raw);
-    return Array.isArray(arr) ? arr : [];
+    const parsed = JSON.parse(raw);
+    // Legacy: file was a bare array of compact entries before this refactor.
+    if (Array.isArray(parsed)) return { latest: null, history: parsed };
+    if (parsed && typeof parsed === 'object') {
+      return {
+        latest: parsed.latest ?? null,
+        history: Array.isArray(parsed.history) ? parsed.history : []
+      };
+    }
+    return { latest: null, history: [] };
   } catch (err) {
-    if (err.code === 'ENOENT') return [];
+    if (err.code === 'ENOENT') return { latest: null, history: [] };
     throw err;
   }
 }
 
-// Write the JSON array one entry per line — keeps each tick a clean, reviewable
-// one-line addition in `git diff` while still being valid JSON.
-function serialise(entries) {
-  if (entries.length === 0) return '[]\n';
-  return '[\n' + entries.map((e) => JSON.stringify(e)).join(',\n') + '\n]\n';
+// `latest` on one big line, history one entry per line — clean diffs per tick.
+function serialise({ latest, history }) {
+  const head = `  "latest": ${latest ? JSON.stringify(latest) : 'null'}`;
+  const hist =
+    history.length === 0
+      ? '  "history": []'
+      : '  "history": [\n' +
+        history.map((e) => '    ' + JSON.stringify(e)).join(',\n') +
+        '\n  ]';
+  return `{\n${head},\n${hist}\n}\n`;
 }
 
 async function main() {
@@ -72,29 +88,42 @@ async function main() {
 
   const result = await computeImpact({ weather, tide, geometry });
   if (!result.conditions) {
-    throw new Error('No live conditions in result — refusing to log (would corrupt the shared trail).');
+    throw new Error('No live conditions in result — refusing to log.');
   }
-  const entry = buildEntry(result);
 
   const existing = await loadExisting();
-  const last = existing[existing.length - 1];
-  if (last && entry.t - last.t < MIN_GAP_MS) {
-    console.log(`Skipping: last entry is ${Math.round((entry.t - last.t) / 1000)}s old (<${MIN_GAP_MS / 1000}s).`);
+
+  // Don't double-log if the previous tick is too fresh (safety against rapid manual triggers).
+  if (
+    existing.latest &&
+    result.computedAt - existing.latest.computedAt < MIN_GAP_MS
+  ) {
+    const ageS = Math.round((result.computedAt - existing.latest.computedAt) / 1000);
+    console.log(`Skipping: previous latest is ${ageS}s old (<${MIN_GAP_MS / 1000}s).`);
     return;
   }
 
+  // Demote the previous latest into the ghost trail; the new compute takes its place.
+  let history = Array.isArray(existing.history) ? existing.history.slice() : [];
+  if (existing.latest) {
+    history.push(compactEntry(existing.latest));
+  }
+
+  // Trim by age + count.
   const cutoff = Date.now() - MAX_AGE_MS;
-  const next = existing.filter((e) => e && typeof e.lat === 'number' && typeof e.t === 'number' && e.t > cutoff);
-  next.push(entry);
-  if (next.length > MAX_ENTRIES) next.splice(0, next.length - MAX_ENTRIES);
+  history = history.filter(
+    (e) => e && typeof e.lat === 'number' && typeof e.t === 'number' && e.t > cutoff
+  );
+  if (history.length > MAX_ENTRIES) history = history.slice(history.length - MAX_ENTRIES);
 
-  await writeFile(IMPACTS_PATH, serialise(next));
+  await writeFile(IMPACTS_PATH, serialise({ latest: result, history }));
 
-  const w = entry.wind;
+  const w = result.conditions.windAloft;
   console.log(
-    `Logged: ${entry.lat.toFixed(5)}, ${entry.lon.toFixed(5)} · miss ${entry.missM} m · CEP ${entry.cepM} m` +
-      (w ? ` · wind aloft ${w.speedMs} m/s from ${w.dirDeg}°` : '') +
-      ` · ${next.length}/${MAX_ENTRIES} entries`
+    `Logged: ${result.impact.lat.toFixed(5)}, ${result.impact.lon.toFixed(5)}` +
+      ` · miss ${Math.round(result.missM)} m · CEP ${Math.round(result.cepM)} m` +
+      ` · wind aloft ${w.speedMs.toFixed(1)} m/s from ${Math.round(w.dirDeg)}°` +
+      ` · history ${history.length}/${MAX_ENTRIES}`
   );
 }
 

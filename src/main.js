@@ -1,22 +1,29 @@
 import './style.css';
 import { createMap } from './map.js';
 import { computeImpact } from './ballistics/index.js';
-import { renderGunInfo, renderSolution, renderPlace, setAnswer, setStatus, refreshConditionsAge } from './ui.js';
-import { fetchWeather, fetchElevations, fetchTide, fetchHistoricalWeather } from './weather.js';
+import {
+  renderGunInfo,
+  renderSolution,
+  renderPlace,
+  setAnswer,
+  setStatus,
+  refreshConditionsAge
+} from './ui.js';
+import { fetchElevations, fetchHistoricalWeather } from './weather.js';
 import { describeImpact } from './describe.js';
-import { describeImpactAI } from './describe-ai.js';
-import { loadHistory } from './history.js';
+import { loadShared } from './history.js';
 import { BELFAST, TARGET } from './data/belfast.js';
 
-const REFRESH_MS = 10 * 60 * 1000; // re-pull live weather + tide every 10 minutes
+// Live mode just re-pulls the shared JSON. Cron updates at most every 30 min;
+// 5-min refresh aligns with raw.githubusercontent.com's 5-min CDN cache.
+const REFRESH_MS = 5 * 60 * 1000;
 
 const { showSolution, showHistory } = createMap('map');
 renderGunInfo();
 
 const params = new URLSearchParams(location.search);
 
-let geometry = null; // { gunGroundElevM, targetGroundElevM } — fetched once
-let history = []; // populated async from the shared public/impacts.json
+let history = [];
 let showGhosts = params.get('ghosts') === '1';
 
 // Hidden "replay a past day" mode. `?storm` replays the Storm Éowyn case;
@@ -44,17 +51,7 @@ ghostsBtn?.addEventListener('click', () => {
   showGhosts = !showGhosts;
   updateGhosts();
 });
-updateGhosts(); // initial label (count: 0) — replaced once the shared trail loads
-
-// Kick off the shared-trail fetch alongside everything else; it'll repaint when ready.
-loadHistory()
-  .then((entries) => {
-    history = entries;
-    updateGhosts();
-  })
-  .catch(() => {
-    /* trail unavailable — ghost button stays at 0 */
-  });
+updateGhosts(); // initial label (count: 0) — replaced once the shared data loads
 
 // "How does this work?" toggles the explainer prose in the hero.
 const howBtn = document.getElementById('how-btn');
@@ -75,49 +72,37 @@ function render(result) {
   renderSolution(result);
 }
 
-// Fill the headline place. Show the reverse-geocoded name immediately (fast),
-// then upgrade to the Claude vision one-liner if the /api/describe proxy answers.
+// Set the headline. Prefer the cron-pre-rendered place/description if present;
+// otherwise fall back to a client-side Nominatim lookup. (When the AI describer
+// is wired into the cron, `description` will be the Claude vision one-liner.)
 async function describe(result) {
-  try {
-    renderPlace(await describeImpact(result.impact.lat, result.impact.lon), result);
-  } catch {
-    renderPlace(null, result);
+  if (result.place) {
+    renderPlace(result.place, result);
+  } else {
+    try {
+      renderPlace(await describeImpact(result.impact.lat, result.impact.lon), result);
+    } catch {
+      renderPlace(null, result);
+    }
   }
-  try {
-    setAnswer(await describeImpactAI(result));
-  } catch {
-    /* proxy unavailable — keep the reverse-geocoded line */
-  }
-}
-
-async function compute(weather, tide) {
-  try {
-    const result = await computeImpact({ weather, geometry, tide });
-    render(result);
-    describe(result);
-    // The shared ghost trail is written server-side by the log-impact cron; the
-    // browser only reads it. (Historical replays were never logged anyway.)
-  } catch (err) {
-    console.error('Ballistics computation failed:', err);
-    document.getElementById('solution-note').textContent =
-      'Computation failed — see console.';
+  if (result.description) {
+    setAnswer(result.description);
   }
 }
 
-// Re-pull live weather + tide and recompute (timer + refresh button). Also
-// re-fetches the shared ghost trail so newly logged ticks show up.
+// Live mode: re-fetch the shared JSON and re-render. Cheap — no WASM, no
+// Open-Meteo, no tide / elevation fetches on the visit critical path.
 async function refresh() {
   setStatus('updating…');
-  const [weather, tide, entries] = await Promise.all([
-    fetchWeather(BELFAST.position.lat, BELFAST.position.lon).catch(() => null),
-    fetchTide().catch(() => null),
-    loadHistory().catch(() => null)
-  ]);
-  if (entries) {
-    history = entries;
-    updateGhosts();
+  const { latest, history: hist } = await loadShared();
+  history = hist;
+  updateGhosts();
+  if (latest) {
+    render(latest);
+    await describe(latest);
+  } else {
+    document.getElementById('ans-sub').textContent = 'No recent forecast yet — try again in a few minutes.';
   }
-  await compute(weather, tide);
   setStatus('');
 }
 
@@ -125,61 +110,55 @@ if (!historical) {
   document.getElementById('refresh-btn')?.addEventListener('click', () => refresh());
 }
 
-async function run() {
-  // Kick off the network immediately, in parallel with the first WASM compute.
-  const elevP = fetchElevations([BELFAST.position, TARGET.position]).catch(() => null);
-  const weatherP = historical ? null : fetchWeather(BELFAST.position.lat, BELFAST.position.lon).catch(() => null);
-  const tideP = historical ? null : fetchTide().catch(() => null);
+async function runHistorical() {
+  // `?storm` / `?date` — ad-hoc replay, runs the engine in-browser. The
+  // shared JSON isn't involved; nothing is logged.
+  setStatus('loading historical…');
+  const btn = document.getElementById('refresh-btn');
+  if (btn) {
+    btn.textContent = '← back to live';
+    btn.title = 'Return to live weather';
+    btn.onclick = () => {
+      location.href = location.pathname;
+    };
+  }
 
-  // Instant first paint: standard atmosphere, no waiting on the network.
+  const elevs = await fetchElevations([BELFAST.position, TARGET.position]).catch(() => null);
+  const geometry = elevs ? { gunGroundElevM: elevs[0], targetGroundElevM: elevs[1] } : null;
+
+  let weather = null;
   try {
-    const first = await computeImpact({});
-    render(first);
-    describe(first);
+    weather = await fetchHistoricalWeather(
+      BELFAST.position.lat,
+      BELFAST.position.lon,
+      replay.date,
+      replay.hour ?? undefined
+    );
   } catch (err) {
-    console.error('Initial computation failed:', err);
+    console.error('Historical fetch failed:', err);
+  }
+  if (!weather) {
+    document.getElementById('ans-sub').textContent =
+      `No winds-aloft data for ${replay.date} (history reaches back to ~late 2024).`;
   }
 
-  const elevs = await elevP;
-  if (elevs) geometry = { gunGroundElevM: elevs[0], targetGroundElevM: elevs[1] };
-
-  if (historical) {
-    // Hidden replay mode: one historical day, no live refresh.
-    setStatus('loading historical…');
-    const btn = document.getElementById('refresh-btn');
-    if (btn) {
-      btn.textContent = '← back to live';
-      btn.title = 'Return to live weather';
-      btn.onclick = () => {
-        location.href = location.pathname;
-      };
-    }
-    let weather = null;
-    try {
-      weather = await fetchHistoricalWeather(
-        BELFAST.position.lat,
-        BELFAST.position.lon,
-        replay.date,
-        replay.hour ?? undefined
-      );
-    } catch (err) {
-      console.error('Historical fetch failed:', err);
-    }
-    if (!weather) {
-      document.getElementById('ans-sub').textContent =
-        `No winds-aloft data for ${replay.date} (history reaches back to ~late 2024).`;
-    }
-    await compute(weather, null);
-    setStatus(replay.label); // persistent label of which day we're replaying
-    return;
+  try {
+    const result = await computeImpact({ weather, geometry });
+    render(result);
+    await describe(result);
+  } catch (err) {
+    console.error('Ballistics computation failed:', err);
+    document.getElementById('solution-note').textContent = 'Computation failed — see console.';
   }
-
-  // Live mode
-  setStatus('fetching live data…');
-  await compute(await weatherP, await tideP);
-  setStatus('');
-  setInterval(refresh, REFRESH_MS); // re-fetch live weather + tide
-  setInterval(refreshConditionsAge, 20000); // tick the "checked … ago" text
+  setStatus(replay.label);
 }
 
-run();
+async function runLive() {
+  await refresh();
+  setInterval(refresh, REFRESH_MS);
+  setInterval(refreshConditionsAge, 20000); // tick the "checked … ago" text
+  window.addEventListener('focus', () => refresh()); // re-pull when the user returns to the tab
+}
+
+if (historical) runHistorical();
+else runLive();
