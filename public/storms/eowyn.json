@@ -439,5 +439,12 @@
   "onTarget": true,
   "phase": 3,
   "note": "Live weather (winds aloft + air density), Earth curvature and Coriolis applied. CEP includes forecast uncertainty.",
-  "computedAt": 1737698400000
+  "computedAt": 1737698400000,
+  "place": {
+    "place": "Barnet Way",
+    "locality": "Mill Hill",
+    "type": "trunk",
+    "category": "highway"
+  },
+  "description": "Target Wood, just off the A1 near Barnet Way."
 }

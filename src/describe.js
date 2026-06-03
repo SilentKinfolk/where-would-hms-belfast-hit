@@ -24,7 +24,7 @@ export async function describeImpact(lat, lon) {
   return result;
 }
 
-function buildLabel(d) {
+export function buildLabel(d) {
   const a = d.address || {};
   const place =
     (d.name && d.name.trim()) ||

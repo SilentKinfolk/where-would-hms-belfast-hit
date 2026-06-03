@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { fetchHistoricalWeather, fetchElevations } from '../src/weather.js';
 import { computeImpact } from '../src/ballistics/index.js';
 import { BELFAST, TARGET } from '../src/data/belfast.js';
+import { enrichImpact } from './enrich-impact.mjs';
 
 // To add a storm: drop a new {key, date, hour?, label} here and re-run.
 const STORMS = [
@@ -37,6 +38,8 @@ async function precompute(storm) {
   const obsMs = Date.parse(result.conditions.obsTime + 'Z');
   result.computedAt = obsMs;
   if (result.conditions) result.conditions.fetchedAt = obsMs;
+
+  await enrichImpact(result);
 
   await mkdir(OUT_DIR, { recursive: true });
   const path = OUT_DIR + storm.key + '.json';

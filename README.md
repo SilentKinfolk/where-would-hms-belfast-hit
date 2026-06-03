@@ -30,18 +30,20 @@ Static site: vanilla JS, [Vite](https://vitejs.dev/),
 [Leaflet](https://leafletjs.com/). Ballistics run client-side in WebAssembly via
 [js-ballistics](https://github.com/o-murphy/js-ballistics).
 
-## Optional: AI impact descriptions
+## AI impact descriptions
 
-By default the headline names the impact via reverse geocoding. A small Node
-proxy can also render the impact zone as a map image and have a Claude vision
-model describe it (*"Mill Hill Golf Course, somewhere round the 10th."*).
+The headline line (*"Mill Hill Golf Course, somewhere around the 15th hole."*)
+is written by a Claude vision model reading the rendered impact map. It runs
+once per 30-minute cron tick on GitHub Actions and is baked into
+`public/impacts.json`, so visitors never trigger an API call and the key
+never reaches the browser.
+
+For local prompt iteration the same call is wrapped in a small Node proxy:
 
 ```bash
 ANTHROPIC_API_KEY=sk-ant-... npm run proxy   # :8787
 npm run dev                                  # Vite forwards /api/* to it
 ```
-
-If the proxy is down or has no key, the app falls back to the geocoded line.
 
 See [TODO.md](TODO.md) for open questions and remaining work.
 

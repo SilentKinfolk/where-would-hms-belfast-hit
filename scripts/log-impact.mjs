@@ -14,6 +14,7 @@ import { fileURLToPath } from 'node:url';
 import { fetchWeather, fetchTide, fetchElevations } from '../src/weather.js';
 import { computeImpact } from '../src/ballistics/index.js';
 import { BELFAST, TARGET } from '../src/data/belfast.js';
+import { enrichImpact } from './enrich-impact.mjs';
 
 const IMPACTS_PATH = fileURLToPath(new URL('../public/impacts.json', import.meta.url));
 
@@ -90,6 +91,8 @@ async function main() {
   if (!result.conditions) {
     throw new Error('No live conditions in result — refusing to log.');
   }
+
+  await enrichImpact(result);
 
   const existing = await loadExisting();
 
