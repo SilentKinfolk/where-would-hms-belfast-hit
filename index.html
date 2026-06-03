@@ -130,9 +130,26 @@
       Weather &amp; tide: <a href="https://open-meteo.com/">Open-Meteo</a> /
       <a href="https://environment.data.gov.uk/flood-monitoring/doc/reference">Environment Agency</a> ·
       Map &amp; places: <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> ·
-      <a href="https://github.com/SilentKinfolk/where-would-hms-belfast-hit">Source on GitHub</a>
+      <a href="https://github.com/SilentKinfolk/where-would-hms-belfast-hit">Source on GitHub</a> ·
+      <span id="visits-count">…</span> visits
     </footer>
 
     <script type="module" src="/src/main.js"></script>
+
+    <!-- GoatCounter: keyless, no cookies. Tracks page views server-side. -->
+    <script
+      data-goatcounter="https://silentkinfolk.goatcounter.com/count"
+      async
+      src="//gc.zgo.at/count.js"
+    ></script>
+    <script>
+      fetch('https://silentkinfolk.goatcounter.com/counter/TOTAL.json')
+        .then((r) => r.json())
+        .then((d) => {
+          const el = document.getElementById('visits-count');
+          if (el && d?.count) el.textContent = d.count;
+        })
+        .catch(() => {});
+    </script>
   </body>
 </html>
