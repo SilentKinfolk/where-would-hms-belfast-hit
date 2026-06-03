@@ -72,18 +72,19 @@ export const GUN = {
     rmsRangeError: 0.013
   },
 
-  // Propellant sensitivity. RN Range Tables for cordite SC are quoted at 80 °F
-  // (26.7 °C) propellant temperature; MV shifts roughly +0.8 m/s per °C above
-  // that, -0.8 m/s per °C below. js-ballistics applies this natively via
-  // Ammo.usePowderSensitivity once we set powderTemp (reference) + tempModifier
-  // (m/s per °C) and pass the current magazine temperature on Atmo.
+  // Propellant sensitivity. RN Range Tables for cordite SC are quoted at the
+  // 26.7 °C reference propellant temperature; muzzle velocity shifts roughly
+  // +0.8 m/s per °C above that, -0.8 m/s per °C below. js-ballistics applies
+  // this natively via Ammo.usePowderSensitivity once we set powderTemp
+  // (reference) + tempModifier (m/s per °C) and pass the current magazine
+  // temperature on Atmo.
   //
   // The 0.8 m/s/°C figure is the standard cordite SC sensitivity from
   // Admiralty propellant calibration; the specific 6"/50 Mk XXIII number isn't
   // separately published, but cordite SC was the standard charge.
   propellant: {
-    referenceTempC: 26.7, // 80 °F — RN range-table calibration temperature
-    mvSensitivityMsPerC: 0.8, // ~0.1 % of MV per °C, typical for cordite SC
+    referenceTempC: 26.7, // RN range-table calibration temperature
+    mvSensitivityMsPerC: 0.8, // ~0.1 % of muzzle velocity per °C, typical for cordite SC
     note: 'Cordite SC nominal sensitivity; current magazine temperature comes from a soil-temp proxy (see weather.js).'
   },
 

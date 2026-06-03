@@ -17,11 +17,12 @@
 - **Wind gust factor.** Use `wind_gusts_10m`; fold into the wind-speed sigma in
   `metUncertaintySigmas()` instead of the fixed 2 m/s estimate.
 - **Powder temperature.** js-ballistics has native `Ammo.powderTemp` +
-  `tempModifier` + `usePowderSensitivity`. Reference 26.7 °C (80 °F RN cordite
-  SC nominal), sensitivity ~0.8 m/s per °C. Magazine temp = Open-Meteo
+  `tempModifier` + `usePowderSensitivity`. Reference 26.7 °C (RN cordite SC
+  nominal), sensitivity ~0.8 m/s per °C. Magazine temp = Open-Meteo
   `soil_temperature_28_to_100cm` as a thermal-mass proxy for the hull's
   interior (Thames water temp not freely API'd; soil-at-1m has the right time
-  constant). Residual proxy error is below the round-to-round MV PE noise floor.
+  constant). Residual proxy error is below the round-to-round muzzle-velocity
+  PE noise floor.
 - **Shell-weight PE.** RN graded shells into bands of ~±1 lb. Add a third
   range-sigma contribution alongside MV PE and elevation laying PE.
 - **Forecast ensemble spread.** Replace `FORECAST_UNCERTAINTY` estimates
