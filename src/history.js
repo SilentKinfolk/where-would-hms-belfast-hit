@@ -1,11 +1,15 @@
 // Shared ghost trail of past fall-of-shot estimates. The canonical log lives
-// in public/impacts.json, refreshed every 30 min by .github/workflows/log-impact.yml
-// (cron) and shipped with the static site. Every visitor sees the same trail.
+// at public/impacts.json on the main branch, refreshed every 30 min by the
+// log-impact cron. The browser fetches it straight from raw.githubusercontent.com
+// in production so cron commits don't need a Pages redeploy.
 //
 // Previously this was a per-browser localStorage log; that's been retired so
 // the trail is consistent across users.
 
 const MAX_AGE_MS = 30 * 24 * 3600 * 1000; // mirror what the cron trims to
+
+const RAW_URL =
+  'https://raw.githubusercontent.com/SilentKinfolk/where-would-hms-belfast-hit/main/public/impacts.json';
 
 // Names from the earlier per-browser version — tidied on load so they don't
 // linger in users' localStorage forever.
@@ -26,10 +30,13 @@ function tidyRetiredStorage() {
 /** Fetch the shared trail. Newest last. Stale + malformed entries filtered out. */
 export async function loadHistory() {
   tidyRetiredStorage();
-  // Vite's BASE_URL handles the GitHub Pages sub-path; cache-buster forces a
-  // fresh fetch every clock minute so the CDN doesn't serve stale entries.
-  const base = import.meta.env?.BASE_URL ?? '/';
-  const url = `${base}impacts.json?t=${Math.floor(Date.now() / 60000)}`;
+  // Dev uses Vite's served copy; prod hits the raw URL directly so updates
+  // don't depend on Pages redeploying. Cache-buster (per clock-minute) forces
+  // a revalidation past raw's 5-min Cache-Control.
+  const bust = Math.floor(Date.now() / 60000);
+  const url = import.meta.env?.DEV
+    ? `${import.meta.env.BASE_URL ?? '/'}impacts.json?t=${bust}`
+    : `${RAW_URL}?t=${bust}`;
   try {
     const res = await fetch(url, { cache: 'no-cache' });
     if (!res.ok) return [];

@@ -3,6 +3,11 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches: [main]
+    # The shared ghost trail (public/impacts.json) is fetched by the browser
+    # directly from raw.githubusercontent.com, so cron commits to it don't need
+    # a Pages redeploy.
+    paths-ignore:
+      - 'public/impacts.json'
   workflow_dispatch:
 
 permissions:
