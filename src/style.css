@@ -1,0 +1,312 @@
+/* Black-and-white, single-serving-site aesthetic: a centered question + giant
+   answer, a wide map band below, and plain collapsible detail. Deliberately
+   minimal — close to raw HTML. */
+
+:root {
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+}
+
+body {
+  background: #fff;
+  color: #111;
+  font-family: Georgia, 'Times New Roman', Times, serif;
+  line-height: 1.5;
+}
+
+/* Hero: the question + the big answer, centered */
+.hero {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 52px 20px 30px;
+  text-align: center;
+}
+
+.question {
+  margin: 0 0 22px;
+  font-size: clamp(1.8rem, 5vw, 2.9rem);
+  font-weight: normal;
+  line-height: 1.15;
+  color: #111;
+}
+
+.answer {
+  margin: 6px 0 10px;
+  font-size: clamp(2.3rem, 7vw, 4.6rem);
+  font-weight: bold;
+  line-height: 1.05;
+  letter-spacing: -0.01em;
+}
+
+.sub {
+  margin: 0 0 16px;
+  font-size: 1.15rem;
+}
+
+.cond {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #555;
+}
+
+.cond .status {
+  font-style: italic;
+  margin-left: 6px;
+}
+
+.refresh {
+  margin-left: 8px;
+  background: none;
+  border: none;
+  color: #111;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.85rem;
+  text-decoration: underline;
+  padding: 0;
+}
+
+.refresh:hover {
+  color: #555;
+}
+
+/* Subtle controls row under the answer */
+.subnav {
+  margin-top: 16px;
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  align-items: baseline;
+  flex-wrap: wrap;
+  font-size: 0.85rem;
+}
+
+.textlink {
+  background: none;
+  border: none;
+  color: #555;
+  text-decoration: underline;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0;
+}
+
+.textlink:hover {
+  color: #000;
+}
+
+.textlink.subtle {
+  color: #aaa;
+  text-decoration: none;
+}
+
+.textlink.subtle:hover {
+  color: #555;
+  text-decoration: underline;
+}
+
+.textlink[aria-pressed='true'] {
+  color: #000;
+  font-weight: bold;
+}
+
+/* Explainer prose (in the hero, left-aligned for reading) */
+.prose {
+  max-width: 600px;
+  margin: 16px auto 0;
+  text-align: left;
+  font-size: 0.95rem;
+  color: #333;
+  line-height: 1.6;
+}
+
+.prose p {
+  margin: 0 0 10px;
+}
+
+/* Map: full-width horizontal band below the answer */
+.map-wrap {
+  width: 100%;
+  border-top: 1px solid #000;
+  border-bottom: 1px solid #000;
+}
+
+#map {
+  width: 100%;
+  height: 58vh;
+  min-height: 360px;
+  background: #f3f3f3;
+}
+
+/* Greyscale the basemap tiles for the B&W look; leave the shot overlay coloured
+   black/grey so it stays legible. */
+.leaflet-tile-pane {
+  filter: grayscale(1) contrast(1.03);
+}
+
+/* Plain black map pins (divIcons) */
+.map-pin {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  font-size: 13px;
+  font-weight: bold;
+  background: #fff;
+  color: #111;
+  border: 2px solid #111;
+}
+
+.map-pin--impact {
+  background: #111;
+  color: #fff;
+}
+
+.leaflet-popup-content {
+  font-family: Georgia, serif;
+  font-size: 0.85rem;
+}
+
+/* Collapsible technical detail, centered and narrow */
+.details {
+  max-width: 680px;
+  margin: 26px auto 0;
+  padding: 0 20px;
+}
+
+.details > details {
+  border-top: 1px solid #ddd;
+}
+
+.details > details:last-child {
+  border-bottom: 1px solid #ddd;
+}
+
+/* Nested technical sections inside the single "Technical detail" line */
+.tech-body {
+  padding: 4px 0 8px 6px;
+}
+
+.tech-body > details {
+  border-top: 1px solid #eee;
+}
+
+summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 11px 2px;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: #444;
+  user-select: none;
+}
+
+summary::-webkit-details-marker {
+  display: none;
+}
+
+summary::before {
+  content: '+ ';
+  color: #999;
+}
+
+details[open] > summary::before {
+  content: '– ';
+}
+
+summary:hover {
+  color: #000;
+}
+
+.stats {
+  margin: 0;
+  display: grid;
+  gap: 7px;
+  padding: 2px 2px 14px;
+}
+
+.stat {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 14px;
+  font-size: 0.92rem;
+}
+
+.stat dt {
+  color: #666;
+}
+
+.stat dd {
+  margin: 0;
+  font-weight: bold;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.note {
+  margin: 0 2px 14px;
+  font-size: 0.82rem;
+  color: #666;
+  line-height: 1.45;
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  padding: 2px;
+}
+
+.linkbtn {
+  background: none;
+  border: none;
+  color: #111;
+  text-decoration: underline;
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+}
+
+.smallbtn {
+  margin-top: 6px;
+  font: inherit;
+  font-size: 0.82rem;
+  background: #fff;
+  border: 1px solid #111;
+  color: #111;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+
+.smallbtn:hover {
+  background: #111;
+  color: #fff;
+}
+
+/* Footer credits */
+.credits {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 22px 20px 40px;
+  text-align: center;
+  color: #999;
+  font-size: 0.75rem;
+}
+
+.credits a {
+  color: #777;
+}

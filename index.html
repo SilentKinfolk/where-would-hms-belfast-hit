@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Where Would Belfast Hit Right Now?</title>
+    <meta
+      name="description"
+      content="A ballistic calculator for HMS Belfast's 6-inch guns — where would the shells land right now?"
+    />
+  </head>
+  <body>
+    <!-- The question + the big, immediate answer -->
+    <section class="hero">
+      <h1 class="question">Where would HMS Belfast hit right now?</h1>
+      <div class="answer" id="ans-place">…</div>
+      <p class="sub" id="ans-sub">working it out…</p>
+      <p class="cond">
+        <span id="ans-cond-text">fetching live conditions…</span>
+        <span id="status" class="status"></span>
+        <button id="refresh-btn" class="refresh" title="Refresh now">↻ refresh</button>
+      </p>
+
+      <!-- Subtle, always-available controls -->
+      <nav class="subnav">
+        <button id="ghosts-btn" class="textlink" type="button" aria-pressed="false">
+          show past calculations (0)
+        </button>
+        <button id="how-btn" class="textlink" type="button" aria-expanded="false">
+          how does this work?
+        </button>
+      </nav>
+
+      <div class="prose" id="how-prose" hidden>
+        <p>
+          Belfast's forward turrets are fixed, pointed at the London Gateway
+          services 18.7&nbsp;km away. This page works out where a shell fired
+          from that laying would land in <em>today's</em> weather.
+        </p>
+        <p>
+          A point-mass ballistics engine flies the shell, with drag tuned to
+          Belfast's own range tables. Live wind at every altitude, air density, Earth
+          curvature, Coriolis, spin drift and the Thames tide all bend the arc.
+          The output is one likely impact point and a Circular Error Probable:
+          how tightly the shells would group, given gun scatter and forecast
+          uncertainty.
+        </p>
+        <p>
+          The aim is assumed and several inputs are estimates, but the physics
+          matches the range tables to within ~2%. Numbers below the map.
+        </p>
+      </div>
+    </section>
+
+    <!-- The map, full width below -->
+    <div class="map-wrap"><div id="map"></div></div>
+
+    <!-- Technical detail, collapsed into a single unobtrusive line -->
+    <section class="details">
+      <details class="tech">
+        <summary>Technical detail</summary>
+        <div class="tech-body">
+          <details>
+            <summary>Gun laying</summary>
+            <dl class="stats">
+              <div class="stat"><dt>Trained on</dt><dd id="stat-target">—</dd></div>
+              <div class="stat"><dt>Bearing</dt><dd id="stat-bearing">—</dd></div>
+              <div class="stat"><dt>Elevation</dt><dd id="stat-elevation">—</dd></div>
+            </dl>
+            <p class="note" id="laying-note">—</p>
+          </details>
+
+          <details>
+            <summary>Fall of shot</summary>
+            <dl class="stats">
+              <div class="stat"><dt>Impact</dt><dd id="stat-impact">—</dd></div>
+              <div class="stat"><dt>Range</dt><dd id="stat-range">—</dd></div>
+              <div class="stat"><dt>Miss distance</dt><dd id="stat-miss">—</dd></div>
+              <div class="stat"><dt>Time of flight</dt><dd id="stat-tof">—</dd></div>
+              <div class="stat"><dt>Apogee</dt><dd id="stat-apex">—</dd></div>
+              <div class="stat"><dt>Striking velocity</dt><dd id="stat-vimpact">—</dd></div>
+              <div class="stat"><dt>Descent angle</dt><dd id="stat-descent">—</dd></div>
+              <div class="stat"><dt>Range PE</dt><dd id="stat-rangepe">—</dd></div>
+              <div class="stat"><dt>Deflection PE</dt><dd id="stat-deflpe">—</dd></div>
+              <div class="stat"><dt>Circular Error Probable</dt><dd id="stat-cep">—</dd></div>
+            </dl>
+            <p class="note" id="cep-note">—</p>
+            <p class="note" id="solution-note">—</p>
+          </details>
+
+          <details>
+            <summary>Current conditions</summary>
+            <dl class="stats">
+              <div class="stat"><dt>Temperature</dt><dd id="cond-temp">—</dd></div>
+              <div class="stat"><dt>Pressure</dt><dd id="cond-pressure">—</dd></div>
+              <div class="stat"><dt>Humidity</dt><dd id="cond-humidity">—</dd></div>
+              <div class="stat"><dt>Surface wind</dt><dd id="cond-surfwind">—</dd></div>
+              <div class="stat"><dt>Wind aloft (apogee)</dt><dd id="cond-aloft">—</dd></div>
+              <div class="stat"><dt>Thames tide</dt><dd id="cond-tide">—</dd></div>
+            </dl>
+            <p class="note" id="cond-meta">—</p>
+            <button id="storm-btn" class="smallbtn" type="button">
+              ▶ Replay Storm Éowyn (24 Jan 2025)
+            </button>
+          </details>
+
+          <details>
+            <summary>The gun</summary>
+            <dl class="stats">
+              <div class="stat"><dt>Type</dt><dd id="gun-type">—</dd></div>
+              <div class="stat"><dt>Shell</dt><dd id="gun-shell">—</dd></div>
+              <div class="stat"><dt>Muzzle velocity</dt><dd id="gun-mv">—</dd></div>
+              <div class="stat"><dt>Max range</dt><dd id="gun-range">—</dd></div>
+            </dl>
+          </details>
+        </div>
+      </details>
+    </section>
+
+    <footer class="credits">
+      Educational toy — uses many approximations, not a real fire-control solution.
+      Gun &amp; range tables: <a href="http://www.navweaps.com/Weapons/WNBR_6-50_mk23.php">NavWeaps</a> ·
+      Ballistics: <a href="https://github.com/o-murphy/js-ballistics">js-ballistics</a> ·
+      Weather &amp; tide: <a href="https://open-meteo.com/">Open-Meteo</a> /
+      <a href="https://environment.data.gov.uk/flood-monitoring/doc/reference">Environment Agency</a> ·
+      Map &amp; places: <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>
+    </footer>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

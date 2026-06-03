@@ -1,0 +1,21 @@
+{
+  "name": "where-would-hms-belfast-hit",
+  "version": "0.1.0",
+  "description": "A ballistic calculator web app for HMS Belfast's 6-inch guns: where would she hit right now?",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "proxy": "node server/describe.mjs"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.100.1",
+    "js-ballistics": "^3.0.0-beta.2",
+    "leaflet": "^1.9.4",
+    "staticmaps": "^1.13.1"
+  },
+  "devDependencies": {
+    "vite": "^5.4.0"
+  }
+}
