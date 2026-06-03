@@ -1,4 +1,4 @@
-name: Log impact
+name: Fire the guns
 
 # Every 30 minutes: re-run the engine server-side with live weather and append
 # one entry to public/impacts.json. The site fetches that file as the shared
