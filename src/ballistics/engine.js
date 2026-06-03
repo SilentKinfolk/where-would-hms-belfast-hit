@@ -191,7 +191,7 @@ export function makeAtmo(surface) {
  * directionFrom 0 as a TAILWIND (blowing downrange), so the engine angle is the
  * wind's "blowing-toward" bearing relative to the line of fire = mf + 180 - B.
  */
-export function makeWindLayers(windProfile, trajPoints, bearingDeg, bandM = 1500) {
+export function makeWindLayers(windProfile, trajPoints, bearingDeg, bandM = 750) {
   if (!windProfile?.length || !trajPoints?.length) return undefined;
   const maxDown = trajPoints[trajPoints.length - 1].downrangeM;
   const altAtDownrange = (d) => {

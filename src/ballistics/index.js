@@ -19,7 +19,7 @@ import {
   makeWindLayers
 } from './engine.js';
 import { cepFromSigmas, PE_PER_SIGMA, ELLIPSE_50_PER_SIGMA } from './dispersion.js';
-import { windAtAltitude } from '../weather.js';
+import { windAtAltitude, effectiveSurfaceTempC } from '../weather.js';
 
 const EARTH_RADIUS_M = 6371008.8;
 
@@ -71,10 +71,14 @@ export async function computeImpact(options = {}) {
   let atmo;
   let winds;
   let profilePts = null;
+  let effSurfaceTempC = null;
   if (weather) {
-    atmo = makeAtmo(weather.surface);
-    // Map winds-aloft to downrange layers using a nominal (still-air) trajectory.
+    // Map winds-aloft to downrange layers using a nominal (still-air) trajectory,
+    // and use the same altitude samples to project the measured upper-air
+    // temperatures onto a single effective surface T (see weather.js).
     profilePts = await trajectoryProfile(laying.elevationDeg, { impactHeightM });
+    effSurfaceTempC = effectiveSurfaceTempC(weather.profile, profilePts, weather.surface);
+    atmo = makeAtmo({ ...weather.surface, tempC: effSurfaceTempC });
     winds = makeWindLayers(weather.profile, profilePts, laying.azimuthDeg);
   }
   const conditions = { atmo, winds, coriolis, impactHeightM };
@@ -171,10 +175,19 @@ async function metUncertaintySigmas({ laying, weather, profilePts, conditions, s
   );
   const sWd = await fireWith({ winds: wdWinds });
 
-  // Temperature (air density): nudge surface temp by dT °C.
+  // Temperature (air density): nudge the WHOLE profile by dT °C (correlated
+  // forecast bias) and re-derive the effective surface T from the shifted
+  // observations. Perturbing surface T alone would be near-invisible because
+  // the effective T is fitted to the aloft profile.
   const dT = 5;
+  const warmedProfile = weather.profile.map((p) => ({
+    ...p,
+    tempC: Number.isFinite(p.tempC) ? p.tempC + dT : p.tempC
+  }));
+  const warmedSurface = { ...weather.surface, tempC: weather.surface.tempC + dT };
+  const tEffWarm = effectiveSurfaceTempC(warmedProfile, profilePts, warmedSurface);
   const sT = await fireWith({
-    atmo: makeAtmo({ ...weather.surface, tempC: weather.surface.tempC + dT })
+    atmo: makeAtmo({ ...warmedSurface, tempC: tEffWarm })
   });
 
   const dR = (s, d) => (s.rangeM - shot.rangeM) / d;

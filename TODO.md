@@ -9,10 +9,6 @@
   (currently tuned to a single 700 yd Town-class anecdote).
 
 ## Modelling
-- Finer met resolution: add 975/950/900/800/500 hPa Open-Meteo pressure levels,
-  shrink downrange wind bands below 1.5 km.
-- Density aloft from measured upper-air temperatures, not ICAO lapse off the
-  surface.
 - "As it literally sits" mode using the museum barrel angles.
 - Per-turret / salvo patterns.
 
