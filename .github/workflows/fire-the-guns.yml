@@ -47,12 +47,12 @@ jobs:
       # this path so cron commits don't trigger a no-op rebuild.)
       - name: Commit impact if changed
         run: |
-          if [ -z "$(git status --porcelain public/impacts.json)" ]; then
-            echo "impacts.json unchanged — nothing to commit."
+          if [ -z "$(git status --porcelain public/impacts.json public/og.png)" ]; then
+            echo "Outputs unchanged — nothing to commit."
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add public/impacts.json
+          git add public/impacts.json public/og.png
           git commit -m "log impact $(date -u +'%Y-%m-%dT%H:%MZ')"
           git push

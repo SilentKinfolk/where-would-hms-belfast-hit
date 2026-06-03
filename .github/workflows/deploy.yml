@@ -3,11 +3,13 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches: [main]
-    # The shared ghost trail (public/impacts.json) is fetched by the browser
-    # directly from raw.githubusercontent.com, so cron commits to it don't need
-    # a Pages redeploy.
+    # The shared ghost trail (public/impacts.json) and the cron-regenerated OG
+    # image (public/og.png) are fetched by the browser / social platforms
+    # directly from raw.githubusercontent.com, so cron commits to them don't
+    # need a Pages redeploy.
     paths-ignore:
       - 'public/impacts.json'
+      - 'public/og.png'
   workflow_dispatch:
 
 permissions:
@@ -29,7 +31,13 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # VITE_OS_API_KEY is inlined into the static bundle at build time. It is
+      # a public client-side key, so domain-restrict it in the OS Data Hub
+      # console to wherewouldhmsbelfasthit.com (and localhost for dev) — that
+      # is the only thing stopping someone using a leaked key elsewhere.
       - run: npm run build
+        env:
+          VITE_OS_API_KEY: ${{ secrets.VITE_OS_API_KEY }}
       - uses: actions/upload-pages-artifact@v5
         with:
           path: dist

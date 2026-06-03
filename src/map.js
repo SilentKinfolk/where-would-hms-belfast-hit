@@ -41,10 +41,26 @@ const ICONS = {
 export function createMap(elementId) {
   const map = L.map(elementId, { zoomControl: true }).setView([51.57, -0.17], 11);
 
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19,
-    attribution: '&copy; OpenStreetMap contributors'
-  }).addTo(map);
+  // OS Maps API "Light" is OS's pale cartography — the icon contours and
+  // typography in monochrome. CSS pushes it the rest of the way to B&W (see
+  // .leaflet-tile-pane grayscale filter in style.css). Falls back to OSM if
+  // no OS key was injected at build time.
+  const osKey = import.meta.env?.VITE_OS_API_KEY;
+  if (osKey) {
+    L.tileLayer(
+      `https://api.os.uk/maps/raster/v1/zxy/Light_3857/{z}/{x}/{y}.png?key=${osKey}`,
+      {
+        maxZoom: 20,
+        minZoom: 7,
+        attribution: `Contains OS data &copy; Crown copyright and database right ${new Date().getFullYear()}`
+      }
+    ).addTo(map);
+  } else {
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+  }
 
   const belfastLatLng = [BELFAST.position.lat, BELFAST.position.lon];
 

@@ -1,6 +1,6 @@
 // Adds the human-readable place name + AI vision one-liner to a ballistic
 // result, so the cron-written JSON already carries them and the browser does
-// no per-visit API calls.
+// no per-visit API calls. Also re-renders the social-share OG image.
 //
 // Mutates `result` in place:
 //   result.place        — Nominatim label object (same shape as src/describe.js)
@@ -14,7 +14,11 @@
 // prior description is reused verbatim — no Claude call. Saves ~$0.004/tick
 // on duplicate Haiku renders.
 
+import { writeFile, mkdir } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
+
 import Anthropic from '@anthropic-ai/sdk';
+import sharp from 'sharp';
 import StaticMaps from 'staticmaps';
 
 import { destinationPoint, distanceMeters } from '../src/geo.js';
@@ -167,6 +171,55 @@ function cleanTail(raw, placeLabel) {
   return t;
 }
 
+const OG_PATH = fileURLToPath(new URL('../public/og.png', import.meta.url));
+
+/**
+ * Render the social-share OG image: a 1200×630 map zoomed in to the CEP zone
+ * with just the ellipse + impact marker. Greyscaled after render to match the
+ * site's B&W aesthetic. The OSM basemap stays the tile source because no free
+ * keyless B&W provider exists; sharp does the desaturation in one pass.
+ */
+async function renderOgImage(result) {
+  const map = new StaticMaps({
+    width: 1200,
+    height: 630,
+    // Force a tight zoom on the impact zone rather than letting staticmaps
+    // auto-fit. At zoom 16 the OSM tiles show ~1.2 km of map across the 1200 px
+    // canvas — plenty of road/feature context around a ~300 m ellipse without
+    // losing the impact in pixel scale.
+    tileUrl: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+    tileRequestHeader: { 'User-Agent': NOMINATIM_UA }
+  });
+
+  // 50% dispersion ellipse — black stroke + faint fill, matching the in-page map.
+  if (result.ellipse) {
+    const ring = ellipseRing(result.impact, result.ellipse, 60);
+    map.addPolygon({
+      coords: ring.map(([lat, lon]) => [lon, lat]),
+      color: '#111111ff',
+      width: 2,
+      fill: '#11111118'
+    });
+  }
+
+  // Impact marker — a solid black circle, easy to read after greyscale.
+  map.addCircle({
+    coord: [result.impact.lon, result.impact.lat],
+    radius: 14,
+    color: '#111111ff',
+    fill: '#111111ff',
+    width: 2
+  });
+
+  // Centre + fixed zoom keep the framing predictable regardless of ellipse size.
+  await map.render([result.impact.lon, result.impact.lat], 16);
+  const colourPng = await map.image.buffer('image/png');
+  const greyPng = await sharp(colourPng).grayscale().png().toBuffer();
+  await mkdir(fileURLToPath(new URL('../public/', import.meta.url)), { recursive: true });
+  await writeFile(OG_PATH, greyPng);
+  return OG_PATH;
+}
+
 export async function enrichImpact(result, prevLatest = null) {
   // Always refresh the place name. Free, surfaces edge moves even on ticks
   // where the description gets reused.
@@ -231,5 +284,16 @@ export async function enrichImpact(result, prevLatest = null) {
     }
   } catch (err) {
     console.warn('AI description failed:', err.message);
+  }
+}
+
+export async function renderOgImageForResult(result) {
+  try {
+    const path = await renderOgImage(result);
+    console.log(`OG image: wrote ${path}`);
+    return path;
+  } catch (err) {
+    console.warn('OG image render failed:', err.message);
+    return null;
   }
 }

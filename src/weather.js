@@ -4,6 +4,7 @@
 
 const FORECAST = 'https://api.open-meteo.com/v1/forecast';
 const ELEVATION = 'https://api.open-meteo.com/v1/elevation';
+const ENSEMBLE = 'https://ensemble-api.open-meteo.com/v1/ensemble';
 
 // Pressure levels from the surface up well past the shell's apogee (~3.2 km).
 // Dense low-level sampling resolves shear under the apogee; 500 hPa (~5.5 km)
@@ -18,12 +19,17 @@ export async function fetchWeather(lat, lon) {
     `wind_speed_${L}hPa`,
     `wind_direction_${L}hPa`,
     `geopotential_height_${L}hPa`,
-    `temperature_${L}hPa`
+    `temperature_${L}hPa`,
+    `relative_humidity_${L}hPa`
   ]).join(',');
 
+  // soil_temperature_28_to_100cm is the magazine-temperature proxy: ~1 m soil
+  // depth has a ~30-day thermal time constant — close to that of a steel hull
+  // sitting in the Thames. (Thames water temperature isn't exposed by any free
+  // API at Tower Pier; soil-at-depth captures the right seasonal swing.)
   const url =
     `${FORECAST}?latitude=${lat}&longitude=${lon}` +
-    `&current=temperature_2m,relative_humidity_2m,surface_pressure,wind_speed_10m,wind_direction_10m` +
+    `&current=temperature_2m,relative_humidity_2m,surface_pressure,wind_speed_10m,wind_direction_10m,wind_gusts_10m,soil_temperature_28_to_100cm` +
     `&hourly=${hourly}&wind_speed_unit=ms&timezone=GMT&forecast_days=1`;
 
   const res = await fetch(url);
@@ -38,14 +44,15 @@ export async function fetchWeather(lat, lon) {
   if (idx < 0) idx = 0;
 
   // Profile: surface (10 m AGL) plus each pressure level, by altitude. Carries
-  // wind AND the observed temperature/pressure used to derive density aloft.
+  // wind AND the observed temperature/pressure/humidity used to derive density aloft.
   const profile = [
     {
       altitudeM: groundElevM + 10,
       speedMs: c.wind_speed_10m,
       dirFromDeg: c.wind_direction_10m,
       tempC: c.temperature_2m,
-      pressureHpa: c.surface_pressure
+      pressureHpa: c.surface_pressure,
+      humidity: c.relative_humidity_2m / 100
     }
   ];
   for (const L of LEVELS) {
@@ -53,9 +60,17 @@ export async function fetchWeather(lat, lon) {
     const ws = d.hourly[`wind_speed_${L}hPa`]?.[idx];
     const wd = d.hourly[`wind_direction_${L}hPa`]?.[idx];
     const t = d.hourly[`temperature_${L}hPa`]?.[idx];
+    const rh = d.hourly[`relative_humidity_${L}hPa`]?.[idx];
     if (gph == null || ws == null || wd == null) continue;
     if (gph <= groundElevM + 10) continue;
-    profile.push({ altitudeM: gph, speedMs: ws, dirFromDeg: wd, tempC: t, pressureHpa: L });
+    profile.push({
+      altitudeM: gph,
+      speedMs: ws,
+      dirFromDeg: wd,
+      tempC: t,
+      pressureHpa: L,
+      humidity: Number.isFinite(rh) ? rh / 100 : null
+    });
   }
   profile.sort((a, b) => a.altitudeM - b.altitudeM);
 
@@ -66,8 +81,16 @@ export async function fetchWeather(lat, lon) {
       pressureHpa: c.surface_pressure,
       windSpeedMs: c.wind_speed_10m,
       windDirDeg: c.wind_direction_10m,
+      windGustMs: Number.isFinite(c.wind_gusts_10m) ? c.wind_gusts_10m : null,
       groundElevM
     },
+    // Magazine-interior temperature proxy. The forward magazines on a Town-class
+    // cruiser are below the waterline; their air temp follows the hull, which
+    // tracks Thames water temp with hours of lag. Soil at ~1 m depth is the
+    // closest free proxy with the right thermal time constant.
+    magazineTempC: Number.isFinite(c.soil_temperature_28_to_100cm)
+      ? c.soil_temperature_28_to_100cm
+      : null,
     profile,
     obsTime: c.time, // surface observation time (UTC, ~15-min resolution)
     validTime: d.hourly.time[idx], // winds-aloft hourly slot (UTC)
@@ -82,8 +105,24 @@ export async function fetchWeather(lat, lon) {
 const HISTORICAL = 'https://historical-forecast-api.open-meteo.com/v1/forecast';
 
 export async function fetchHistoricalWeather(lat, lon, date, hour) {
-  const hourly = ['temperature_2m', 'relative_humidity_2m', 'surface_pressure', 'wind_speed_10m', 'wind_direction_10m']
-    .concat(LEVELS.flatMap((L) => [`wind_speed_${L}hPa`, `wind_direction_${L}hPa`, `geopotential_height_${L}hPa`, `temperature_${L}hPa`]))
+  const hourly = [
+    'temperature_2m',
+    'relative_humidity_2m',
+    'surface_pressure',
+    'wind_speed_10m',
+    'wind_direction_10m',
+    'wind_gusts_10m',
+    'soil_temperature_28_to_100cm'
+  ]
+    .concat(
+      LEVELS.flatMap((L) => [
+        `wind_speed_${L}hPa`,
+        `wind_direction_${L}hPa`,
+        `geopotential_height_${L}hPa`,
+        `temperature_${L}hPa`,
+        `relative_humidity_${L}hPa`
+      ])
+    )
     .join(',');
   const url =
     `${HISTORICAL}?latitude=${lat}&longitude=${lon}&start_date=${date}&end_date=${date}` +
@@ -113,7 +152,8 @@ export async function fetchHistoricalWeather(lat, lon, date, hour) {
       speedMs: H.wind_speed_10m[idx],
       dirFromDeg: H.wind_direction_10m[idx],
       tempC: H.temperature_2m[idx],
-      pressureHpa: H.surface_pressure[idx]
+      pressureHpa: H.surface_pressure[idx],
+      humidity: Number.isFinite(H.relative_humidity_2m?.[idx]) ? H.relative_humidity_2m[idx] / 100 : null
     }
   ];
   for (const L of LEVELS) {
@@ -121,8 +161,16 @@ export async function fetchHistoricalWeather(lat, lon, date, hour) {
     const ws = H[`wind_speed_${L}hPa`]?.[idx];
     const wd = H[`wind_direction_${L}hPa`]?.[idx];
     const t = H[`temperature_${L}hPa`]?.[idx];
+    const rh = H[`relative_humidity_${L}hPa`]?.[idx];
     if (gph == null || ws == null || wd == null || gph <= groundElevM + 10) continue;
-    profile.push({ altitudeM: gph, speedMs: ws, dirFromDeg: wd, tempC: t, pressureHpa: L });
+    profile.push({
+      altitudeM: gph,
+      speedMs: ws,
+      dirFromDeg: wd,
+      tempC: t,
+      pressureHpa: L,
+      humidity: Number.isFinite(rh) ? rh / 100 : null
+    });
   }
   profile.sort((a, b) => a.altitudeM - b.altitudeM);
 
@@ -133,8 +181,12 @@ export async function fetchHistoricalWeather(lat, lon, date, hour) {
       pressureHpa: H.surface_pressure[idx],
       windSpeedMs: H.wind_speed_10m[idx],
       windDirDeg: H.wind_direction_10m[idx],
+      windGustMs: Number.isFinite(H.wind_gusts_10m?.[idx]) ? H.wind_gusts_10m[idx] : null,
       groundElevM
     },
+    magazineTempC: Number.isFinite(H.soil_temperature_28_to_100cm?.[idx])
+      ? H.soil_temperature_28_to_100cm[idx]
+      : null,
     profile,
     obsTime: H.time[idx],
     validTime: H.time[idx],
@@ -142,6 +194,82 @@ export async function fetchHistoricalWeather(lat, lon, date, hour) {
     source: 'Open-Meteo (historical)',
     historical: true,
     windsAloft: profile.length > 1
+  };
+}
+
+// Forecast uncertainty as the actual ensemble spread, rather than fixed guesses.
+// Uses ICON-EPS (40 members + control) — free, no key, hourly, surface fields
+// only. Returns 1-sigma stddev across members at the current hour for the few
+// variables that drive our impact sensitivity. Returns null on any failure;
+// the engine falls back to FORECAST_UNCERTAINTY estimates in belfast.js.
+export async function fetchEnsembleUncertainty(lat, lon) {
+  const params = new URLSearchParams({
+    latitude: String(lat),
+    longitude: String(lon),
+    hourly: 'temperature_2m,wind_speed_10m,wind_direction_10m',
+    models: 'icon_seamless',
+    wind_speed_unit: 'ms',
+    timezone: 'GMT',
+    forecast_days: '1'
+  });
+  let d;
+  try {
+    const res = await fetch(`${ENSEMBLE}?${params}`);
+    if (!res.ok) return null;
+    d = await res.json();
+  } catch {
+    return null;
+  }
+  const H = d?.hourly;
+  if (!H?.time?.length) return null;
+
+  // Pick the hour closest to now.
+  const nowH = new Date().toISOString().slice(0, 13);
+  let idx = H.time.findIndex((t) => t.slice(0, 13) === nowH);
+  if (idx < 0) idx = 0;
+
+  const memberSamples = (prefix) => {
+    const xs = [];
+    for (const k of Object.keys(H)) {
+      if (k === prefix) continue; // skip the deterministic baseline; we want member spread
+      if (!k.startsWith(`${prefix}_member`)) continue;
+      const v = H[k]?.[idx];
+      if (Number.isFinite(v)) xs.push(v);
+    }
+    return xs;
+  };
+
+  const linearSigma = (xs) => {
+    if (xs.length < 2) return null;
+    const mean = xs.reduce((a, b) => a + b, 0) / xs.length;
+    const variance = xs.reduce((s, x) => s + (x - mean) ** 2, 0) / (xs.length - 1);
+    return Math.sqrt(variance);
+  };
+
+  // Circular stddev (Mardia & Jupp) for directional data; radians out, deg in/out.
+  const circularSigmaDeg = (degs) => {
+    if (degs.length < 2) return null;
+    const rads = degs.map((d) => (d * Math.PI) / 180);
+    const c = rads.reduce((a, r) => a + Math.cos(r), 0) / rads.length;
+    const s = rads.reduce((a, r) => a + Math.sin(r), 0) / rads.length;
+    const R = Math.hypot(c, s);
+    if (R <= 1e-6 || R >= 1) return null;
+    return Math.sqrt(-2 * Math.log(R)) * (180 / Math.PI);
+  };
+
+  const sigmaTempC = linearSigma(memberSamples('temperature_2m'));
+  const sigmaWindSpeedMs = linearSigma(memberSamples('wind_speed_10m'));
+  const sigmaWindDirDeg = circularSigmaDeg(memberSamples('wind_direction_10m'));
+
+  if (sigmaTempC == null && sigmaWindSpeedMs == null && sigmaWindDirDeg == null) return null;
+
+  return {
+    sigmaTempC,
+    sigmaWindSpeedMs,
+    sigmaWindDirDeg,
+    source: 'Open-Meteo ICON-EPS',
+    nMembers: memberSamples('temperature_2m').length,
+    validTime: H.time[idx]
   };
 }
 
@@ -177,6 +305,8 @@ export async function fetchElevations(points) {
 
 // Specific gas constant for dry air (J / kg / K).
 const R_DRY_AIR = 287.05;
+// Specific gas constant for water vapour (J / kg / K).
+const R_WATER_VAPOR = 461.495;
 // ICAO troposphere lapse rate magnitude (K/m). Matches js-ballistics' internal
 // constant; keeping our derivation here in sync means the effective surface T
 // we fit will reproduce the engine's modelled density exactly along the trajectory.
@@ -184,17 +314,36 @@ const ICAO_LAPSE_KPM = 0.0065;
 const ICAO_GRAVITY = 9.80665;
 const ICAO_EXP = ICAO_GRAVITY / (R_DRY_AIR * ICAO_LAPSE_KPM); // ≈ 5.2558
 
-const dryDensity = (tempC, pressureHpa) =>
-  (pressureHpa * 100) / (R_DRY_AIR * (tempC + 273.15));
+// Saturation vapour pressure (Pa) — Magnus formula, valid roughly -40..+50 °C.
+const eSatPa = (tempC) => 610.94 * Math.exp((17.625 * tempC) / (tempC + 243.04));
 
-// Linear in tempC, log-linear in pressure (closer to hydrostatic).
+/** Moist-air density (kg/m³). humidity is a fraction in [0, 1]; 0 = dry. */
+function moistAirDensity(tempC, pressureHpa, humidity = 0) {
+  const T_K = tempC + 273.15;
+  const P_pa = pressureHpa * 100;
+  const eVap = (humidity ?? 0) * eSatPa(tempC);
+  const pDry = P_pa - eVap;
+  return pDry / (R_DRY_AIR * T_K) + eVap / (R_WATER_VAPOR * T_K);
+}
+
+// Linear in tempC, log-linear in pressure (closer to hydrostatic). Humidity
+// interpolates linearly; nulls are treated as 0 so a missing level can't poison
+// neighbours.
 function atmoAtAltitude(profile, altitudeM) {
   if (altitudeM <= profile[0].altitudeM) {
-    return { tempC: profile[0].tempC, pressureHpa: profile[0].pressureHpa };
+    return {
+      tempC: profile[0].tempC,
+      pressureHpa: profile[0].pressureHpa,
+      humidity: profile[0].humidity ?? 0
+    };
   }
   const last = profile[profile.length - 1];
   if (altitudeM >= last.altitudeM) {
-    return { tempC: last.tempC, pressureHpa: last.pressureHpa };
+    return {
+      tempC: last.tempC,
+      pressureHpa: last.pressureHpa,
+      humidity: last.humidity ?? 0
+    };
   }
   let i = 1;
   while (i < profile.length && altitudeM > profile[i].altitudeM) i++;
@@ -203,7 +352,8 @@ function atmoAtAltitude(profile, altitudeM) {
   const f = (altitudeM - a.altitudeM) / (b.altitudeM - a.altitudeM);
   return {
     tempC: a.tempC + (b.tempC - a.tempC) * f,
-    pressureHpa: Math.exp(Math.log(a.pressureHpa) + f * Math.log(b.pressureHpa / a.pressureHpa))
+    pressureHpa: Math.exp(Math.log(a.pressureHpa) + f * Math.log(b.pressureHpa / a.pressureHpa)),
+    humidity: (a.humidity ?? 0) + ((b.humidity ?? 0) - (a.humidity ?? 0)) * f
   };
 }
 
@@ -229,7 +379,8 @@ export function effectiveSurfaceTempC(profile, trajPoints, surface) {
   const groundElevM = surface.groundElevM ?? 0;
   const surfacePressureHpa = surface.pressureHpa;
 
-  // Sample the OBSERVED density at every trajectory altitude.
+  // Sample the OBSERVED moist-air density at every trajectory altitude,
+  // using the per-level relative humidity from the profile.
   const samples = trajPoints
     .map((p) => p.altitudeM)
     .filter((h) => Number.isFinite(h) && h >= groundElevM);
@@ -237,10 +388,14 @@ export function effectiveSurfaceTempC(profile, trajPoints, surface) {
   const obsMean =
     samples.reduce((s, h) => {
       const a = atmoAtAltitude(profile, h);
-      return s + dryDensity(a.tempC, a.pressureHpa);
+      return s + moistAirDensity(a.tempC, a.pressureHpa, a.humidity);
     }, 0) / samples.length;
 
-  // ICAO density at altitude h given a candidate surface T (in °C).
+  // ICAO density at altitude h given a candidate surface T (in °C). The engine
+  // computes ONE density ratio at the surface using surface humidity and applies
+  // it up the ICAO column, so match that here: use the same surface humidity
+  // when scoring candidates against the moist obs mean.
+  const surfHumidity = surface.humidity ?? 0;
   const icaoMean = (tSurfC) => {
     const T0K = tSurfC + 273.15;
     let s = 0;
@@ -248,7 +403,7 @@ export function effectiveSurfaceTempC(profile, trajPoints, surface) {
       const T_K = T0K - ICAO_LAPSE_KPM * (h - groundElevM);
       if (T_K <= 0) return 0;
       const p_hpa = surfacePressureHpa * Math.pow(T_K / T0K, ICAO_EXP);
-      s += (p_hpa * 100) / (R_DRY_AIR * T_K);
+      s += moistAirDensity(T_K - 273.15, p_hpa, surfHumidity);
     }
     return s / samples.length;
   };

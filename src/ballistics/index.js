@@ -49,11 +49,25 @@ function impactPoint(azimuthDeg, downrangeM, windageM) {
 
 /**
  * Fire the fixed laying through the current conditions and report the fall of shot.
- * @param {{weather?: import('../weather.js').Weather|null, geometry?: object}} [options]
+ * @param {{
+ *   weather?: import('../weather.js').Weather|null,
+ *   geometry?: object,
+ *   tide?: object|null,
+ *   ensembleSigmas?: {sigmaTempC?:number|null, sigmaWindSpeedMs?:number|null, sigmaWindDirDeg?:number|null, source?:string, nMembers?:number}|null,
+ *   groundElevAt?: (lat:number, lon:number) => number|null,
+ *   demSource?: string|null
+ * }} [options]
  * @returns {Promise<ImpactResult>}
  */
 export async function computeImpact(options = {}) {
-  const { weather = null, geometry = null, tide = null } = options;
+  const {
+    weather = null,
+    geometry = null,
+    tide = null,
+    ensembleSigmas = null,
+    groundElevAt = null,
+    demSource = null
+  } = options;
 
   const { targetRangeM } = LAYING;
   const targetGroundElevM = geometry?.targetGroundElevM ?? TARGET.groundElevM;
@@ -62,7 +76,8 @@ export async function computeImpact(options = {}) {
   // The laying is fixed. Tide moves the live waterline → the muzzle → where the
   // fixed laying's shell actually lands (a tiny, ~metres effect).
   const liveMuzzleM = (tide?.levelMAOD ?? gunGroundElevM) + BELFAST.muzzleHeightM;
-  const impactHeightM = impactHeightFor(targetRangeM, liveMuzzleM, targetGroundElevM);
+  let groundAtImpactM = targetGroundElevM;
+  let impactHeightM = impactHeightFor(targetRangeM, liveMuzzleM, groundAtImpactM);
 
   const laying = LAYING;
 
@@ -81,10 +96,39 @@ export async function computeImpact(options = {}) {
     atmo = makeAtmo({ ...weather.surface, tempC: effSurfaceTempC });
     winds = makeWindLayers(weather.profile, profilePts, laying.azimuthDeg);
   }
-  const conditions = { atmo, winds, coriolis, impactHeightM };
+  // Magazine temperature → js-ballistics adjusts MV via powder sensitivity.
+  const powderTempC = weather?.magazineTempC ?? null;
+  const conditions = { atmo, winds, coriolis, impactHeightM, powderTempC };
 
-  const shot = await fireAtElevation(laying.elevationDeg, conditions);
-  const impact = impactPoint(laying.azimuthDeg, shot.rangeM, shot.windageM);
+  // Iterate the ground intersection: each pass fires with the impactHeight derived
+  // from the previous impact's actual ground elevation. Without a DEM the loop
+  // exits after one pass; with a DEM it usually converges in 2-3 passes because
+  // each step moves the impact only metres horizontally.
+  let shot = await fireAtElevation(laying.elevationDeg, conditions);
+  let impact = impactPoint(laying.azimuthDeg, shot.rangeM, shot.windageM);
+  if (groundElevAt) {
+    for (let iter = 0; iter < 4; iter++) {
+      const g = groundElevAt(impact.lat, impact.lon);
+      if (!Number.isFinite(g)) break;
+      const rangeToImpact = distanceMeters(BELFAST.position, impact);
+      const nextImpactHeightM = impactHeightFor(rangeToImpact, liveMuzzleM, g);
+      if (Math.abs(nextImpactHeightM - conditions.impactHeightM) < 0.05) {
+        groundAtImpactM = g;
+        impactHeightM = nextImpactHeightM;
+        break;
+      }
+      conditions.impactHeightM = nextImpactHeightM;
+      impactHeightM = nextImpactHeightM;
+      groundAtImpactM = g;
+      shot = await fireAtElevation(laying.elevationDeg, conditions);
+      const next = impactPoint(laying.azimuthDeg, shot.rangeM, shot.windageM);
+      if (distanceMeters(impact, next) < 1) {
+        impact = next;
+        break;
+      }
+      impact = next;
+    }
+  }
   const missM = distanceMeters(impact, TARGET.position);
 
   // The real (curved) ground track: each step's downrange + lateral windage,
@@ -98,7 +142,7 @@ export async function computeImpact(options = {}) {
   // conditions (forecast wind/temperature error). Combined in quadrature.
   const gun = await computeDispersion(laying.elevationDeg, shot.rangeM, conditions);
   const met = weather
-    ? await metUncertaintySigmas({ laying, weather, profilePts, conditions, shot })
+    ? await metUncertaintySigmas({ laying, weather, profilePts, conditions, shot, ensembleSigmas })
     : { sigmaRangeM: 0, sigmaDefM: 0 };
   const sigmaRangeM = Math.hypot(gun.sigmaRangeM, met.sigmaRangeM);
   const sigmaDefM = Math.hypot(gun.sigmaDefM, met.sigmaDefM);
@@ -125,6 +169,7 @@ export async function computeImpact(options = {}) {
     cepM: cepFromSigmas(sigmaRangeM, sigmaDefM),
     cepGunM: cepFromSigmas(gun.sigmaRangeM, gun.sigmaDefM),
     cepMetM: met.sigmaRangeM || met.sigmaDefM ? cepFromSigmas(met.sigmaRangeM, met.sigmaDefM) : 0,
+    forecastSigmas: met.sigmas ?? null,
     rangePEm: PE_PER_SIGMA * sigmaRangeM,
     deflectionPEm: PE_PER_SIGMA * sigmaDefM,
     ellipse: {
@@ -135,7 +180,9 @@ export async function computeImpact(options = {}) {
 
     conditions: weather ? summariseConditions(weather, shot.apexM) : null,
     tide: tide ? { levelMAOD: tide.levelMAOD, dateTime: tide.dateTime, station: tide.station } : null,
-    effects: { coriolis: true, curvature: true, weather: Boolean(weather) },
+    groundElevAtImpactM: groundAtImpactM,
+    demSource: groundElevAt ? demSource ?? 'DEM' : null,
+    effects: { coriolis: true, curvature: true, weather: Boolean(weather), dem: Boolean(groundElevAt) },
     onTarget: laying.reachesTarget,
     phase: 3,
     note: weather
@@ -146,13 +193,41 @@ export async function computeImpact(options = {}) {
 }
 
 /**
+ * Resolve 1-sigma forecast uncertainties. Prefers the live ensemble spread
+ * (ICON-EPS, see weather.fetchEnsembleUncertainty), folds gust margin into the
+ * wind-speed sigma, and falls back to the FORECAST_UNCERTAINTY estimates in
+ * belfast.js for anything missing.
+ */
+function resolveForecastSigmas(weather, ensembleSigmas) {
+  const U = FORECAST_UNCERTAINTY;
+  const gust = weather?.surface?.windGustMs;
+  const mean = weather?.surface?.windSpeedMs;
+  // WMO gust = peak 3-s within the hour. Over a 50-s flight the wind varies
+  // between mean and gust; treat half the gust-minus-mean spread as an extra
+  // 1-sigma contribution in quadrature with the ensemble spread.
+  const gustMargin =
+    Number.isFinite(gust) && Number.isFinite(mean) && gust > mean ? (gust - mean) / 2 : 0;
+
+  const ensWs = ensembleSigmas?.sigmaWindSpeedMs;
+  const ensWd = ensembleSigmas?.sigmaWindDirDeg;
+  const ensT = ensembleSigmas?.sigmaTempC;
+  return {
+    windSpeedMs: Math.hypot(Number.isFinite(ensWs) ? ensWs : U.windSpeedMs, gustMargin),
+    windDirDeg: Number.isFinite(ensWd) ? ensWd : U.windDirDeg,
+    tempC: Number.isFinite(ensT) ? ensT : U.tempC,
+    source: ensembleSigmas?.source ?? 'static estimates',
+    gustMargin
+  };
+}
+
+/**
  * Uncertainty in the mean point of impact from imperfect knowledge of the
  * conditions: propagate the forecast wind-speed, wind-direction and temperature
  * errors through the engine (one-sided finite differences against the base
  * shot), returning 1-sigma range/deflection contributions in metres.
  */
-async function metUncertaintySigmas({ laying, weather, profilePts, conditions, shot }) {
-  const U = FORECAST_UNCERTAINTY;
+async function metUncertaintySigmas({ laying, weather, profilePts, conditions, shot, ensembleSigmas }) {
+  const sigmas = resolveForecastSigmas(weather, ensembleSigmas);
   const az = laying.azimuthDeg;
   const fireWith = (override) =>
     fireAtElevation(laying.elevationDeg, { ...conditions, ...override });
@@ -194,15 +269,16 @@ async function metUncertaintySigmas({ laying, weather, profilePts, conditions, s
   const dD = (s, d) => (s.windageM - shot.windageM) / d;
   return {
     sigmaRangeM: Math.hypot(
-      dR(sWs, dws) * U.windSpeedMs,
-      dR(sWd, ddir) * U.windDirDeg,
-      dR(sT, dT) * U.tempC
+      dR(sWs, dws) * sigmas.windSpeedMs,
+      dR(sWd, ddir) * sigmas.windDirDeg,
+      dR(sT, dT) * sigmas.tempC
     ),
     sigmaDefM: Math.hypot(
-      dD(sWs, dws) * U.windSpeedMs,
-      dD(sWd, ddir) * U.windDirDeg,
-      dD(sT, dT) * U.tempC
-    )
+      dD(sWs, dws) * sigmas.windSpeedMs,
+      dD(sWd, ddir) * sigmas.windDirDeg,
+      dD(sT, dT) * sigmas.tempC
+    ),
+    sigmas
   };
 }
 
@@ -246,7 +322,9 @@ function summariseConditions(weather, apexM) {
     pressureHpa: weather.surface.pressureHpa,
     humidity: weather.surface.humidity,
     surfaceWind: { speedMs: weather.surface.windSpeedMs, dirDeg: weather.surface.windDirDeg },
+    surfaceGustMs: weather.surface.windGustMs ?? null,
     windAloft: { speedMs: aloft.speedMs, dirDeg: aloft.dirFromDeg, altitudeM: apexM },
+    magazineTempC: weather.magazineTempC ?? null,
     source: weather.source,
     obsTime: weather.obsTime,
     validTime: weather.validTime,

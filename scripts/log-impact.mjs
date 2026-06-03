@@ -11,10 +11,16 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
-import { fetchWeather, fetchTide, fetchElevations } from '../src/weather.js';
+import {
+  fetchWeather,
+  fetchTide,
+  fetchElevations,
+  fetchEnsembleUncertainty
+} from '../src/weather.js';
 import { computeImpact } from '../src/ballistics/index.js';
 import { BELFAST, TARGET } from '../src/data/belfast.js';
-import { enrichImpact } from './enrich-impact.mjs';
+import { loadDem, elevationAt } from '../src/dem.js';
+import { enrichImpact, renderOgImageForResult } from './enrich-impact.mjs';
 
 const IMPACTS_PATH = fileURLToPath(new URL('../public/impacts.json', import.meta.url));
 
@@ -85,14 +91,24 @@ function serialise({ latest, history }) {
 }
 
 async function main() {
-  const [weather, tide, elevs] = await Promise.all([
+  const [weather, tide, elevs, ensembleSigmas, dem] = await Promise.all([
     fetchWeather(BELFAST.position.lat, BELFAST.position.lon),
     fetchTide().catch(() => null),
-    fetchElevations([BELFAST.position, TARGET.position]).catch(() => null)
+    fetchElevations([BELFAST.position, TARGET.position]).catch(() => null),
+    fetchEnsembleUncertainty(BELFAST.position.lat, BELFAST.position.lon).catch(() => null),
+    loadDem().catch(() => null)
   ]);
   const geometry = elevs ? { gunGroundElevM: elevs[0], targetGroundElevM: elevs[1] } : null;
+  const groundElevAt = dem ? (lat, lon) => elevationAt(dem, lat, lon) : null;
 
-  const result = await computeImpact({ weather, tide, geometry });
+  const result = await computeImpact({
+    weather,
+    tide,
+    geometry,
+    ensembleSigmas,
+    groundElevAt,
+    demSource: dem?.source ?? null
+  });
   if (!result.conditions) {
     throw new Error('No live conditions in result — refusing to log.');
   }
@@ -101,6 +117,7 @@ async function main() {
   // when the new impact has barely moved (saves a Claude call).
   const existing = await loadExisting();
   await enrichImpact(result, existing.latest);
+  await renderOgImageForResult(result);
 
   // Don't double-log if the previous tick is too fresh (safety against rapid manual triggers).
   if (

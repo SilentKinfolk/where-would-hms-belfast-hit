@@ -8,6 +8,23 @@
       name="description"
       content="A ballistic calculator for HMS Belfast's 6-inch guns — where would the shells land right now?"
     />
+
+    <!-- Open Graph / social cards. The image is regenerated every 30 min by
+         the cron and committed to main; we point at the raw.githubusercontent
+         URL so unfurls always see the latest impact map without waiting on a
+         Pages redeploy. Title/description stay static. -->
+    <meta property="og:title" content="Where Would HMS Belfast Hit Right Now?" />
+    <meta
+      property="og:description"
+      content="A live ballistic calculator for HMS Belfast's 6-inch guns, pointed at London Gateway services since 1971."
+    />
+    <meta
+      property="og:image"
+      content="https://raw.githubusercontent.com/SilentKinfolk/where-would-hms-belfast-hit/main/public/og.png"
+    />
+    <meta property="og:url" content="https://wherewouldhmsbelfasthit.com/" />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
   </head>
   <body>
     <!-- The question + the big, immediate answer -->
@@ -39,11 +56,11 @@
         </p>
         <p>
           A point-mass ballistics engine simulates the shell, with drag tuned to
-          HMS Belfast's own range tables. Real wind data at every altitude of the ballistic arc, air density, Earth
-          curvature, Coriolis, spin drift and the Thames tide height, are all fed into the simulation.
+          HMS Belfast's own range tables. Real wind data at every altitude of the ballistic arc, air density and humidity,
+          Earth curvature, Coriolis, spin drift, the Thames tide height, the powder magazine temperature,
+          and LIDAR ground elevation at the impact point, are all fed into the simulation.
           The output is one likely impact point and a Circular Error Probable:
-          How tightly the shells would group, given gun scatter and forecast
-          uncertainty.
+          How tightly the shells would group, given gun scatter and the spread of weather forecast ensembles.
         </p>
         <p>
           A combination of OpenStreetMap data, and a Claude vision model
@@ -76,12 +93,14 @@
             <summary>Fall of shot</summary>
             <dl class="stats">
               <div class="stat"><dt>Impact</dt><dd id="stat-impact">—</dd></div>
+              <div class="stat"><dt>Ground at impact</dt><dd id="stat-ground">—</dd></div>
               <div class="stat"><dt>Range</dt><dd id="stat-range">—</dd></div>
               <div class="stat"><dt>Miss distance</dt><dd id="stat-miss">—</dd></div>
               <div class="stat"><dt>Time of flight</dt><dd id="stat-tof">—</dd></div>
               <div class="stat"><dt>Apogee</dt><dd id="stat-apex">—</dd></div>
               <div class="stat"><dt>Striking velocity</dt><dd id="stat-vimpact">—</dd></div>
               <div class="stat"><dt>Descent angle</dt><dd id="stat-descent">—</dd></div>
+              <div class="stat"><dt>Modelled MV</dt><dd id="stat-effmv">—</dd></div>
               <div class="stat"><dt>Range PE</dt><dd id="stat-rangepe">—</dd></div>
               <div class="stat"><dt>Deflection PE</dt><dd id="stat-deflpe">—</dd></div>
               <div class="stat"><dt>Circular Error Probable</dt><dd id="stat-cep">—</dd></div>
@@ -97,8 +116,11 @@
               <div class="stat"><dt>Pressure</dt><dd id="cond-pressure">—</dd></div>
               <div class="stat"><dt>Humidity</dt><dd id="cond-humidity">—</dd></div>
               <div class="stat"><dt>Surface wind</dt><dd id="cond-surfwind">—</dd></div>
+              <div class="stat"><dt>Surface gust</dt><dd id="cond-gust">—</dd></div>
               <div class="stat"><dt>Wind aloft (apogee)</dt><dd id="cond-aloft">—</dd></div>
               <div class="stat"><dt>Thames tide</dt><dd id="cond-tide">—</dd></div>
+              <div class="stat"><dt>Magazine temp</dt><dd id="cond-magazine">—</dd></div>
+              <div class="stat"><dt>Forecast spread</dt><dd id="cond-spread">—</dd></div>
             </dl>
             <p class="note" id="cond-meta">—</p>
             <button id="storm-btn" class="smallbtn" type="button">
@@ -112,6 +134,7 @@
               <div class="stat"><dt>Type</dt><dd id="gun-type">—</dd></div>
               <div class="stat"><dt>Shell</dt><dd id="gun-shell">—</dd></div>
               <div class="stat"><dt>Muzzle velocity</dt><dd id="gun-mv">—</dd></div>
+              <div class="stat"><dt>Propellant</dt><dd id="gun-propellant">—</dd></div>
               <div class="stat"><dt>Max range</dt><dd id="gun-range">—</dd></div>
             </dl>
           </details>
@@ -125,7 +148,9 @@
       Ballistics: <a href="https://github.com/o-murphy/js-ballistics">js-ballistics</a> ·
       Weather &amp; tide: <a href="https://open-meteo.com/">Open-Meteo</a> /
       <a href="https://environment.data.gov.uk/flood-monitoring/doc/reference">Environment Agency</a> ·
-      Map &amp; places: <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> ·
+      Terrain: <a href="https://environment.data.gov.uk/dataset/13787b9a-26a4-4775-8523-806d13af58fc">EA LIDAR Composite DTM</a> ·
+      Map: <a href="https://www.ordnancesurvey.co.uk/products/os-maps-api">OS Maps API</a> /
+      <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> ·
       <a href="https://github.com/SilentKinfolk/where-would-hms-belfast-hit">Source on GitHub</a>
       <p class="visits">
         <span class="counter" id="visits-count" aria-label="visit counter">

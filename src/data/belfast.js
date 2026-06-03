@@ -72,6 +72,21 @@ export const GUN = {
     rmsRangeError: 0.013
   },
 
+  // Propellant sensitivity. RN Range Tables for cordite SC are quoted at 80 °F
+  // (26.7 °C) propellant temperature; MV shifts roughly +0.8 m/s per °C above
+  // that, -0.8 m/s per °C below. js-ballistics applies this natively via
+  // Ammo.usePowderSensitivity once we set powderTemp (reference) + tempModifier
+  // (m/s per °C) and pass the current magazine temperature on Atmo.
+  //
+  // The 0.8 m/s/°C figure is the standard cordite SC sensitivity from
+  // Admiralty propellant calibration; the specific 6"/50 Mk XXIII number isn't
+  // separately published, but cordite SC was the standard charge.
+  propellant: {
+    referenceTempC: 26.7, // 80 °F — RN range-table calibration temperature
+    mvSensitivityMsPerC: 0.8, // ~0.1 % of MV per °C, typical for cordite SC
+    note: 'Cordite SC nominal sensitivity; current magazine temperature comes from a soil-temp proxy (see weather.js).'
+  },
+
   // Intrinsic gun dispersion (weather-independent). These input probable errors
   // are propagated through the trajectory engine to the fall of shot, giving an
   // elliptical pattern (long in range, narrow in deflection — the classic naval
@@ -85,7 +100,12 @@ export const GUN = {
   dispersion: {
     muzzleVelocityPE_ms: 3.0, // round-to-round MV probable error (~0.36% of MV)
     elevationLayingPE_mil: 1.0, // quadrant-elevation laying + barrel jump PE
-    deflectionLayingPE_mil: 1.0 // lateral (bearing) laying PE
+    deflectionLayingPE_mil: 1.0, // lateral (bearing) laying PE
+    // Shell-weight grading: RN ordnance was lot-graded with weight stencilled
+    // on each round. Within a lot, round-to-round variation is small (~50 g);
+    // between lots, weight bands span ±1 lb (~0.45 kg). The 50 g random PE is
+    // the right per-shot figure since fire-control corrects for lot weight.
+    shellWeightPE_kg: 0.05
   }
 };
 

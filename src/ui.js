@@ -54,7 +54,12 @@ const updateCondLine = () => {
 export function renderGunInfo() {
   $('gun-type').textContent = GUN.designation;
   $('gun-shell').textContent = `${GUN.shellMassLb} lb (${GUN.shellMassKg} kg)`;
-  $('gun-mv').textContent = `${GUN.muzzleVelocityMs} m/s`;
+  $('gun-mv').textContent = `${GUN.muzzleVelocityMs} m/s (new-gun) · ${GUN.drag.modelMvMs} m/s (service)`;
+  const p = GUN.propellant;
+  if ($('gun-propellant') && p) {
+    $('gun-propellant').textContent =
+      `Cordite SC nominal · ref ${p.referenceTempC} °C · ±${p.mvSensitivityMsPerC} m/s per °C`;
+  }
   $('gun-range').textContent = `${fmtKm(GUN.maxRangeM)} (max)`;
 }
 
@@ -105,6 +110,11 @@ export function renderSolution(result) {
 
   // Fall of shot
   $('stat-impact').textContent = fmtCoord(result.impact.lat, result.impact.lon);
+  if ($('stat-ground')) {
+    $('stat-ground').textContent = Number.isFinite(result.groundElevAtImpactM)
+      ? `${result.groundElevAtImpactM.toFixed(1)} m AOD${result.demSource ? ` · ${result.demSource}` : ''}`
+      : '—';
+  }
   $('stat-range').textContent = `${fmtKm(result.rangeM)} · ${fmtMiles(result.rangeM)}`;
   $('stat-miss').textContent =
     result.missM < 50 ? 'on target' : `${fmtDist(result.missM)} from target`;
@@ -112,6 +122,20 @@ export function renderSolution(result) {
   $('stat-apex').textContent = Number.isFinite(result.apexM) ? fmtKm(result.apexM) : '—';
   $('stat-vimpact').textContent = `${Math.round(result.impactVelMs)} m/s`;
   $('stat-descent').textContent = `${result.descentDeg.toFixed(1)}°`;
+  if ($('stat-effmv')) {
+    const magT = result.conditions?.magazineTempC;
+    const refT = GUN.propellant?.referenceTempC;
+    const sens = GUN.propellant?.mvSensitivityMsPerC;
+    if (Number.isFinite(magT) && Number.isFinite(refT) && Number.isFinite(sens)) {
+      const delta = sens * (magT - refT);
+      const eff = GUN.drag.modelMvMs + delta;
+      const sign = delta >= 0 ? '+' : '−';
+      $('stat-effmv').textContent =
+        `${eff.toFixed(1)} m/s (${GUN.drag.modelMvMs} ${sign} ${Math.abs(delta).toFixed(1)} for ${magT.toFixed(1)} °C magazine)`;
+    } else {
+      $('stat-effmv').textContent = `${GUN.drag.modelMvMs} m/s (no powder correction)`;
+    }
+  }
   $('stat-rangepe').textContent =
     result.rangePEm != null ? `± ${Math.round(result.rangePEm)} m` : '—';
   $('stat-deflpe').textContent =
@@ -122,7 +146,9 @@ export function renderSolution(result) {
     result.cepMetM > 0
       ? `Gun dispersion ${Math.round(result.cepGunM)} m, widened to ${Math.round(
           result.cepM
-        )} m by forecast uncertainty (±${Math.round(result.cepMetM)} m).`
+        )} m by forecast uncertainty (±${Math.round(result.cepMetM)} m)${
+          result.forecastSigmas?.source ? ` · ${result.forecastSigmas.source}` : ''
+        }.`
       : 'CEP is gun dispersion only (no live-weather uncertainty).';
   $('solution-note').textContent = result.note;
 
@@ -131,6 +157,7 @@ export function renderSolution(result) {
     ? `${fmtTide(result.tide.levelMAOD)} AOD · ${result.tide.station}`
     : '—';
   renderConditions(result.conditions);
+  renderForecastSpread(result.forecastSigmas);
 }
 
 /** Update the live-conditions panel and the headline conditions line. */
@@ -149,11 +176,38 @@ export function renderConditions(c) {
   $('cond-pressure').textContent = `${Math.round(c.pressureHpa)} hPa`;
   $('cond-humidity').textContent = `${Math.round(c.humidity * 100)} %`;
   $('cond-surfwind').textContent = fmtWind(c.surfaceWind.speedMs, c.surfaceWind.dirDeg);
+  if ($('cond-gust')) {
+    $('cond-gust').textContent = Number.isFinite(c.surfaceGustMs)
+      ? `${c.surfaceGustMs.toFixed(1)} m/s`
+      : '—';
+  }
   $('cond-aloft').textContent = `${fmtWind(c.windAloft.speedMs, c.windAloft.dirDeg)} @ ${fmtKm(
     c.windAloft.altitudeM
   )}`;
+  if ($('cond-magazine')) {
+    $('cond-magazine').textContent = Number.isFinite(c.magazineTempC)
+      ? `${c.magazineTempC.toFixed(1)} °C · soil-temp proxy`
+      : '—';
+  }
   $('cond-meta').textContent = condMetaText(c);
   updateCondLine();
+}
+
+function renderForecastSpread(fs) {
+  const el = $('cond-spread');
+  if (!el) return;
+  if (!fs || (fs.sigmaWindSpeedMs == null && fs.sigmaWindDirDeg == null && fs.sigmaTempC == null)) {
+    el.textContent = '—';
+    return;
+  }
+  // Show the *effective* sigmas (windSpeedMs already folds in any gust margin);
+  // each is null when neither the ensemble nor the fallback could supply it.
+  const parts = [];
+  if (Number.isFinite(fs.windSpeedMs)) parts.push(`wind ±${fs.windSpeedMs.toFixed(1)} m/s`);
+  if (Number.isFinite(fs.windDirDeg)) parts.push(`dir ±${fs.windDirDeg.toFixed(0)}°`);
+  if (Number.isFinite(fs.tempC)) parts.push(`temp ±${fs.tempC.toFixed(1)} °C`);
+  const src = fs.source ? ` · ${fs.source}` : '';
+  el.textContent = parts.join(', ') + src;
 }
 
 /** Re-render the "checked … ago" parts so they tick between refreshes. */

@@ -43,6 +43,9 @@ const calc = new Calculator({
  * @property {import('js-ballistics').Wind[]} [winds] Wind layers (Phase 2).
  * @property {{latitudeDeg:number, azimuthDeg?:number}} [coriolis] Coriolis.
  * @property {number} [mvMs] Muzzle-velocity override (m/s); default GUN.drag.modelMvMs.
+ * @property {number} [shellMassKg] Shell mass override (kg); default GUN.shellMassKg.
+ * @property {number} [powderTempC] Propellant (magazine) temperature, °C; if
+ *   provided, js-ballistics auto-adjusts MV via Ammo.usePowderSensitivity.
  * @property {number} [impactHeightM] Ground height of the impact relative to the
  *   muzzle plane (m); lets us model Earth curvature + target elevation. Default 0.
  */
@@ -53,24 +56,53 @@ const PE_PER_SIGMA = 0.6745; // probable error = 0.6745 * standard deviation
 
 function buildShot(elevationDeg, conditions = {}) {
   const calibreIn = GUN.calibreMm / 25.4;
+  const shellMassKg = conditions.shellMassKg ?? GUN.shellMassKg;
   const dm = new DragModel({
     bc: GUN.drag.ballisticCoefficient,
     dragTable: DRAG_TABLES[GUN.drag.table],
-    weight: UNew.Gram(GUN.shellMassKg * 1000),
+    weight: UNew.Gram(shellMassKg * 1000),
     diameter: UNew.Inch(calibreIn),
     length: UNew.Inch(GUN.projectileLengthIn) // enables spin-drift stability calc
   });
-  const ammo = new Ammo({ dm, mv: UNew.MPS(conditions.mvMs ?? GUN.drag.modelMvMs) });
+  const refMv = conditions.mvMs ?? GUN.drag.modelMvMs;
+  const usePowderTemp =
+    Number.isFinite(conditions.powderTempC) && GUN.propellant?.mvSensitivityMsPerC;
+  // js-ballistics' tempModifier is NORMALISED, not raw m/s/°C: the engine's
+  // formula is dMV = tempModifier × (v0 / 15) × dT. So the modifier we pass
+  // must scale our true sensitivity (m/s per °C) by 15 / referenceMv. See
+  // Ammo.getVelocityForTemp in node_modules/js-ballistics/dist/index.js.
+  const tempModifier = usePowderTemp
+    ? (GUN.propellant.mvSensitivityMsPerC * 15) / refMv
+    : 0;
+  const ammo = new Ammo({
+    dm,
+    mv: UNew.MPS(refMv),
+    powderTemp: usePowderTemp ? UNew.Celsius(GUN.propellant.referenceTempC) : undefined,
+    tempModifier,
+    usePowderSensitivity: Boolean(usePowderTemp)
+  });
   const weapon = new Weapon({
     sightHeight: UNew.Meter(0),
     // Right-hand rifling, 1 turn per `riflingTwistCalibers` calibres → spin drift.
     twist: UNew.Inch(calibreIn * GUN.riflingTwistCalibers),
     zeroElevation: UNew.Degree(elevationDeg)
   });
+  // If we have a magazine temp and an atmo, set powderTemperature on the atmo
+  // so the engine's auto-correction uses it; otherwise leave the atmo alone.
+  let atmo = conditions.atmo ?? Atmo.standard();
+  if (usePowderTemp) {
+    atmo = new Atmo({
+      altitude: atmo.altitude,
+      pressure: atmo.pressure,
+      temperature: atmo.temperature,
+      humidity: atmo.humidity,
+      powderTemperature: UNew.Celsius(conditions.powderTempC)
+    });
+  }
   const shot = new Shot({
     weapon,
     ammo,
-    atmo: conditions.atmo ?? Atmo.standard(),
+    atmo,
     winds: conditions.winds
   });
   if (conditions.coriolis?.latitudeDeg != null) {
@@ -246,27 +278,38 @@ export async function solveElevationForRange(targetRangeM, conditions = {}) {
  * Intrinsic gun dispersion at the given laying, propagated through the
  * trajectory. Returns 1-sigma standard deviations of the fall of shot (metres)
  * in the range (down the line of fire) and deflection (cross) directions.
- * Range scatter comes from round-to-round muzzle-velocity variation and
- * elevation-laying error; deflection from lateral laying error.
+ * Range scatter combines round-to-round muzzle-velocity variation, elevation-
+ * laying error, and shell-weight grading; deflection comes from lateral laying
+ * error.
  * @returns {Promise<{sigmaRangeM:number, sigmaDefM:number}>}
  */
 export async function computeDispersion(elevationDeg, rangeM, conditions = {}) {
   const d = GUN.dispersion;
   const baseMv = conditions.mvMs ?? GUN.drag.modelMvMs;
+  const baseMass = conditions.shellMassKg ?? GUN.shellMassKg;
 
-  // Trajectory sensitivities by central finite difference (4 extra fires).
+  // Trajectory sensitivities by central finite difference (6 extra fires).
   const dv = 5; // m/s
   const dq = 0.5; // deg
+  const dm = 0.5; // kg — comfortably wider than the 50 g PE so finite diff is well-conditioned
   const rHiV = (await fireAtElevation(elevationDeg, { ...conditions, mvMs: baseMv + dv })).rangeM;
   const rLoV = (await fireAtElevation(elevationDeg, { ...conditions, mvMs: baseMv - dv })).rangeM;
   const dR_dv = (rHiV - rLoV) / (2 * dv); // m per (m/s)
   const rHiQ = (await fireAtElevation(elevationDeg + dq, conditions)).rangeM;
   const rLoQ = (await fireAtElevation(elevationDeg - dq, conditions)).rangeM;
   const dR_dQEdeg = (rHiQ - rLoQ) / (2 * dq); // m per degree
+  const rHiM = (await fireAtElevation(elevationDeg, { ...conditions, shellMassKg: baseMass + dm })).rangeM;
+  const rLoM = (await fireAtElevation(elevationDeg, { ...conditions, shellMassKg: baseMass - dm })).rangeM;
+  const dR_dMassKg = (rHiM - rLoM) / (2 * dm); // m per kg
 
   const sigMv = d.muzzleVelocityPE_ms / PE_PER_SIGMA;
   const sigQEdeg = d.elevationLayingPE_mil * MIL_RAD / DEG / PE_PER_SIGMA;
-  const sigmaRangeM = Math.hypot(dR_dv * sigMv, dR_dQEdeg * sigQEdeg);
+  const sigMassKg = (d.shellWeightPE_kg ?? 0) / PE_PER_SIGMA;
+  const sigmaRangeM = Math.hypot(
+    dR_dv * sigMv,
+    dR_dQEdeg * sigQEdeg,
+    dR_dMassKg * sigMassKg
+  );
   const sigmaDefM = (rangeM * d.deflectionLayingPE_mil * MIL_RAD) / PE_PER_SIGMA;
   return { sigmaRangeM, sigmaDefM };
 }
