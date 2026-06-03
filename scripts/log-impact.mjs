@@ -22,7 +22,10 @@ const MAX_ENTRIES = 1500; // ~30 days at 30-min cadence (1440), with slack
 const MAX_AGE_MS = 30 * 24 * 3600 * 1000;
 const MIN_GAP_MS = 60 * 1000; // dedup if two runs land within a minute
 
-// Compact form for the ghost trail — just enough to redraw the point + ellipse.
+// Compact form for the ghost trail — enough to redraw the point + ellipse,
+// plus the Nominatim place label and the Claude one-liner that ran with that
+// tick. The ghost popup doesn't read those two; they live in the JSON purely
+// as a record of what each past run said when it happened.
 function compactEntry(result) {
   return {
     t: result.computedAt,
@@ -44,7 +47,9 @@ function compactEntry(result) {
           speedMs: Number(result.conditions.windAloft.speedMs.toFixed(1)),
           dirDeg: Math.round(result.conditions.windAloft.dirDeg)
         }
-      : null
+      : null,
+    place: result.place ?? null,
+    description: result.description ?? null
   };
 }
 
