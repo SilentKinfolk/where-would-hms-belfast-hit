@@ -1,6 +1,5 @@
 import './style.css';
 import { createMap } from './map.js';
-import { computeImpact } from './ballistics/index.js';
 import {
   renderGunInfo,
   renderSolution,
@@ -9,14 +8,18 @@ import {
   setStatus,
   refreshConditionsAge
 } from './ui.js';
-import { fetchElevations, fetchHistoricalWeather } from './weather.js';
 import { describeImpact } from './describe.js';
 import { loadShared } from './history.js';
-import { BELFAST, TARGET } from './data/belfast.js';
 
 // Live mode just re-pulls the shared JSON. Cron updates at most every 30 min;
 // 5-min refresh aligns with raw.githubusercontent.com's 5-min CDN cache.
 const REFRESH_MS = 5 * 60 * 1000;
+
+// Pre-rendered storm replays — see scripts/precompute-storm.mjs. The browser
+// only fetches; nothing is recomputed here, so js-ballistics WASM never loads.
+const KNOWN_STORMS = {
+  eowyn: { url: 'storms/eowyn.json', label: 'Storm Éowyn · 24 Jan 2025' }
+};
 
 const { showSolution, showHistory } = createMap('map');
 renderGunInfo();
@@ -26,16 +29,9 @@ const params = new URLSearchParams(location.search);
 let history = [];
 let showGhosts = params.get('ghosts') === '1';
 
-// Hidden "replay a past day" mode. `?storm` replays the Storm Éowyn case;
-// `?date=YYYY-MM-DD&hour=H` replays any day winds-aloft history covers (~late 2024+).
-const STORMS = { eowyn: { date: '2025-01-24', hour: null, label: 'Storm Éowyn · 24 Jan 2025' } };
-let replay = null;
-if (params.has('storm')) replay = STORMS[params.get('storm') || 'eowyn'] ?? STORMS.eowyn;
-else if (params.get('date')) {
-  const h = params.get('hour');
-  replay = { date: params.get('date'), hour: h != null ? Number(h) : null, label: params.get('date') };
-}
-const historical = Boolean(replay);
+const stormKey = params.has('storm') ? params.get('storm') || 'eowyn' : null;
+const storm = stormKey ? KNOWN_STORMS[stormKey] ?? KNOWN_STORMS.eowyn : null;
+const inStormMode = Boolean(storm);
 
 const ghostsBtn = document.getElementById('ghosts-btn');
 
@@ -101,18 +97,18 @@ async function refresh() {
     render(latest);
     await describe(latest);
   } else {
-    document.getElementById('ans-sub').textContent = 'No recent forecast yet — try again in a few minutes.';
+    document.getElementById('ans-sub').textContent =
+      'No recent forecast yet — try again in a few minutes.';
   }
   setStatus('');
 }
 
-if (!historical) {
+if (!inStormMode) {
   document.getElementById('refresh-btn')?.addEventListener('click', () => refresh());
 }
 
-async function runHistorical() {
-  // `?storm` / `?date` — ad-hoc replay, runs the engine in-browser. The
-  // shared JSON isn't involved; nothing is logged.
+async function runStorm() {
+  // Storm replays are pre-rendered into static JSON files; just fetch + render.
   setStatus('loading historical…');
   const btn = document.getElementById('refresh-btn');
   if (btn) {
@@ -122,35 +118,18 @@ async function runHistorical() {
       location.href = location.pathname;
     };
   }
-
-  const elevs = await fetchElevations([BELFAST.position, TARGET.position]).catch(() => null);
-  const geometry = elevs ? { gunGroundElevM: elevs[0], targetGroundElevM: elevs[1] } : null;
-
-  let weather = null;
   try {
-    weather = await fetchHistoricalWeather(
-      BELFAST.position.lat,
-      BELFAST.position.lon,
-      replay.date,
-      replay.hour ?? undefined
-    );
-  } catch (err) {
-    console.error('Historical fetch failed:', err);
-  }
-  if (!weather) {
-    document.getElementById('ans-sub').textContent =
-      `No winds-aloft data for ${replay.date} (history reaches back to ~late 2024).`;
-  }
-
-  try {
-    const result = await computeImpact({ weather, geometry });
+    const base = import.meta.env?.BASE_URL ?? '/';
+    const res = await fetch(`${base}${storm.url}`);
+    if (!res.ok) throw new Error(`storm fetch HTTP ${res.status}`);
+    const result = await res.json();
     render(result);
     await describe(result);
   } catch (err) {
-    console.error('Ballistics computation failed:', err);
-    document.getElementById('solution-note').textContent = 'Computation failed — see console.';
+    console.error('Storm replay failed:', err);
+    document.getElementById('ans-sub').textContent = 'Failed to load historical replay.';
   }
-  setStatus(replay.label);
+  setStatus(storm.label);
 }
 
 async function runLive() {
@@ -160,5 +139,5 @@ async function runLive() {
   window.addEventListener('focus', () => refresh()); // re-pull when the user returns to the tab
 }
 
-if (historical) runHistorical();
+if (inStormMode) runStorm();
 else runLive();
