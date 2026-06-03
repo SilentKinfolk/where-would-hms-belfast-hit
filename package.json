@@ -8,6 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "proxy": "node server/describe.mjs",
+    "log-impact": "node scripts/log-impact.mjs",
     "test": "vitest run"
   },
   "dependencies": {

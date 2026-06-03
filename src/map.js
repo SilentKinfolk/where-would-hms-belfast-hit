@@ -122,9 +122,10 @@ export function createMap(elementId) {
     historyLayer.clearLayers();
     if (!show || !entries || entries.length === 0) return;
 
-    // The last entry is the CURRENT estimate (already drawn live), so the ghost
-    // trail is everything before it.
-    const ghosts = entries.slice(0, -1);
+    // The trail comes from the cron-written impacts.json — its latest entry is
+    // up to 30 min old and distinct from the browser's live point, so render
+    // every entry as a ghost (no slicing).
+    const ghosts = entries;
 
     const n = ghosts.length;
     ghosts.forEach((e, i) => {

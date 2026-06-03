@@ -5,7 +5,7 @@ import { renderGunInfo, renderSolution, renderPlace, setAnswer, setStatus, refre
 import { fetchWeather, fetchElevations, fetchTide, fetchHistoricalWeather } from './weather.js';
 import { describeImpact } from './describe.js';
 import { describeImpactAI } from './describe-ai.js';
-import { loadHistory, recordImpact } from './history.js';
+import { loadHistory } from './history.js';
 import { BELFAST, TARGET } from './data/belfast.js';
 
 const REFRESH_MS = 10 * 60 * 1000; // re-pull live weather + tide every 10 minutes
@@ -16,7 +16,7 @@ renderGunInfo();
 const params = new URLSearchParams(location.search);
 
 let geometry = null; // { gunGroundElevM, targetGroundElevM } — fetched once
-let history = loadHistory();
+let history = []; // populated async from the shared public/impacts.json
 let showGhosts = params.get('ghosts') === '1';
 
 // Hidden "replay a past day" mode. `?storm` replays the Storm Éowyn case;
@@ -44,7 +44,17 @@ ghostsBtn?.addEventListener('click', () => {
   showGhosts = !showGhosts;
   updateGhosts();
 });
-updateGhosts(); // set the button label + stored count on load
+updateGhosts(); // initial label (count: 0) — replaced once the shared trail loads
+
+// Kick off the shared-trail fetch alongside everything else; it'll repaint when ready.
+loadHistory()
+  .then((entries) => {
+    history = entries;
+    updateGhosts();
+  })
+  .catch(() => {
+    /* trail unavailable — ghost button stays at 0 */
+  });
 
 // "How does this work?" toggles the explainer prose in the hero.
 const howBtn = document.getElementById('how-btn');
@@ -85,11 +95,8 @@ async function compute(weather, tide) {
     const result = await computeImpact({ weather, geometry, tide });
     render(result);
     describe(result);
-    // Log only live computes to the ghost trail — not historical replays.
-    if (result.conditions && !historical) {
-      history = recordImpact(result);
-      updateGhosts();
-    }
+    // The shared ghost trail is written server-side by the log-impact cron; the
+    // browser only reads it. (Historical replays were never logged anyway.)
   } catch (err) {
     console.error('Ballistics computation failed:', err);
     document.getElementById('solution-note').textContent =
@@ -97,13 +104,19 @@ async function compute(weather, tide) {
   }
 }
 
-// Re-pull live weather + tide and recompute (timer + refresh button).
+// Re-pull live weather + tide and recompute (timer + refresh button). Also
+// re-fetches the shared ghost trail so newly logged ticks show up.
 async function refresh() {
   setStatus('updating…');
-  const [weather, tide] = await Promise.all([
+  const [weather, tide, entries] = await Promise.all([
     fetchWeather(BELFAST.position.lat, BELFAST.position.lon).catch(() => null),
-    fetchTide().catch(() => null)
+    fetchTide().catch(() => null),
+    loadHistory().catch(() => null)
   ]);
+  if (entries) {
+    history = entries;
+    updateGhosts();
+  }
   await compute(weather, tide);
   setStatus('');
 }

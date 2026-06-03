@@ -22,6 +22,20 @@ export const TARGET = {
   note: "The forward 6-inch turrets have famously been trained on this spot since 1971."
 };
 
+// The fixed "as it sits" gun laying. Derived once from the constants above:
+// azimuth = true bearing BELFAST → TARGET; elevation = the angle that lands a
+// shell on the target under ICAO standard atmosphere, over the curved Earth at
+// the target's elevation. Reproduce with: node scripts/precompute-laying.mjs
+// Treated as the actual gun setting until confirmed from the ship in person.
+export const LAYING = {
+  azimuthDeg: 317.68247,
+  elevationDeg: 24.91250,
+  targetRangeM: 18714.406,
+  impactHeightM: 33.514,
+  assumed: true,
+  reachesTarget: true
+};
+
 // BL 6"/50 Mk XXIII — Belfast's main armament (twelve guns, four triple turrets).
 // Sources: Wikipedia / NavWeaps.
 export const GUN = {

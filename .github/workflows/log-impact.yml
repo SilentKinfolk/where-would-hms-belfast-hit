@@ -1,0 +1,42 @@
+name: Log impact
+
+# Every 30 minutes: re-run the engine server-side with live weather and append
+# one entry to public/impacts.json. The site fetches that file as the shared
+# ghost trail, so all visitors see the same history regardless of browser.
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: log-impact
+  cancel-in-progress: false
+
+jobs:
+  log:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm run log-impact
+
+      - name: Commit impact if changed
+        run: |
+          if [ -z "$(git status --porcelain public/impacts.json)" ]; then
+            echo "impacts.json unchanged — nothing to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/impacts.json
+          git commit -m "log impact $(date -u +'%Y-%m-%dT%H:%MZ')"
+          git push

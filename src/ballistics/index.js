@@ -9,11 +9,10 @@
 // Earth curvature + target elevation are modelled as the impact's ground height
 // relative to the muzzle; Coriolis is always on. The map/UI only see the result.
 
-import { BELFAST, TARGET, GUN, FORECAST_UNCERTAINTY } from '../data/belfast.js';
+import { BELFAST, TARGET, GUN, LAYING, FORECAST_UNCERTAINTY } from '../data/belfast.js';
 import { distanceMeters, bearingDeg, destinationPoint } from '../geo.js';
 import {
   fireAtElevation,
-  solveElevationForRange,
   computeDispersion,
   trajectoryProfile,
   makeAtmo,
@@ -33,38 +32,10 @@ function impactHeightFor(targetRangeM, gunMuzzleElevM, targetGroundElevM) {
   return targetGroundElevM - gunMuzzleElevM - curvatureDropM;
 }
 
-// Cached gun laying, keyed by the impact-height it was solved for (geometry is
-// constant within a session, so this resolves once).
-const layingCache = new Map();
-
-/**
- * The fixed "as it sits" gun laying — treated as the actual gun setting until
- * confirmed from the ship. Bearing = true bearing to the target. Elevation = the
- * angle that lands a shell on the target (over the curved Earth, at the target's
- * elevation) under ICAO standard air. Weather does not change it.
- * @returns {Promise<{azimuthDeg:number, elevationDeg:number, targetRangeM:number, assumed:boolean, reachesTarget:boolean}>}
- */
-export function getGunLaying(impactHeightM = 0) {
-  const key = impactHeightM.toFixed(2);
-  if (!layingCache.has(key)) {
-    layingCache.set(
-      key,
-      (async () => {
-        const azimuthDeg = bearingDeg(BELFAST.position, TARGET.position);
-        const targetRangeM = distanceMeters(BELFAST.position, TARGET.position);
-        const solved = await solveElevationForRange(targetRangeM, { impactHeightM });
-        return {
-          azimuthDeg,
-          elevationDeg: solved ?? GUN.maxElevationDeg,
-          targetRangeM,
-          assumed: true,
-          reachesTarget: solved != null
-        };
-      })()
-    );
-  }
-  return layingCache.get(key);
-}
+// The fixed "as it sits" gun laying lives in data/belfast.js as a precomputed
+// constant (see LAYING). The gun doesn't move; weather changes the fall of
+// shot, not the laying. solveElevationForRange in engine.js stays available for
+// scripts/precompute-laying.mjs if the underlying geometry ever changes.
 
 /**
  * Map a fired shot to a ground impact point: travel downrange along the bearing,
@@ -84,19 +55,16 @@ function impactPoint(azimuthDeg, downrangeM, windageM) {
 export async function computeImpact(options = {}) {
   const { weather = null, geometry = null, tide = null } = options;
 
-  const targetRangeM = distanceMeters(BELFAST.position, TARGET.position);
+  const { targetRangeM } = LAYING;
   const targetGroundElevM = geometry?.targetGroundElevM ?? TARGET.groundElevM;
   const gunGroundElevM = geometry?.gunGroundElevM ?? BELFAST.groundElevM;
 
-  // The laying is solved against a FIXED nominal muzzle height (no tide), so it
-  // doesn't wobble. Tide moves the live waterline → the muzzle → where the fixed
-  // laying's shell actually lands (a tiny, ~metres effect).
-  const nominalMuzzleM = gunGroundElevM + BELFAST.muzzleHeightM;
+  // The laying is fixed. Tide moves the live waterline → the muzzle → where the
+  // fixed laying's shell actually lands (a tiny, ~metres effect).
   const liveMuzzleM = (tide?.levelMAOD ?? gunGroundElevM) + BELFAST.muzzleHeightM;
-  const layingImpactHeightM = impactHeightFor(targetRangeM, nominalMuzzleM, targetGroundElevM);
   const impactHeightM = impactHeightFor(targetRangeM, liveMuzzleM, targetGroundElevM);
 
-  const laying = await getGunLaying(layingImpactHeightM);
+  const laying = LAYING;
 
   // Coriolis is always physical; weather is optional.
   const coriolis = { latitudeDeg: BELFAST.position.lat, azimuthDeg: laying.azimuthDeg };
