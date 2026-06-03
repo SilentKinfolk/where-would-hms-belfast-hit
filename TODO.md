@@ -10,38 +10,21 @@
   give real drift figures for the 6"/50 Mk XXIII. BR.224 range tables at TNA
   Kew or the IWM library would do it.
 
-## In progress
-- **Humidity aloft.** Currently surface only; Open-Meteo serves
-  `relative_humidity_{L}hPa`. Threads through `effectiveSurfaceTempC` for a
-  small density correction.
-- **Wind gust factor.** Use `wind_gusts_10m`; fold into the wind-speed sigma in
-  `metUncertaintySigmas()` instead of the fixed 2 m/s estimate.
-- **Powder temperature.** js-ballistics has native `Ammo.powderTemp` +
-  `tempModifier` + `usePowderSensitivity`. Reference 26.7 °C (RN cordite SC
-  nominal), sensitivity ~0.8 m/s per °C. Magazine temp = Open-Meteo
-  `soil_temperature_28_to_100cm` as a thermal-mass proxy for the hull's
-  interior (Thames water temp not freely API'd; soil-at-1m has the right time
-  constant). Residual proxy error is below the round-to-round muzzle-velocity
-  PE noise floor.
-- **Shell-weight PE.** RN graded shells into bands of ~±1 lb. Add a third
-  range-sigma contribution alongside MV PE and elevation laying PE.
-- **Forecast ensemble spread.** Replace `FORECAST_UNCERTAINTY` estimates
-  (±2 m/s, ±15°, ±2 °C) with Open-Meteo Ensemble API stddev across members.
-- **DEM-aware impact.** EA LIDAR Composite DTM (1 m, free OGL) tile bundled in
-  `public/dem/`. Server-side intersection along the descending arc finds the
-  true ground impact, not a single nominal elevation.
-- **OS Maps basemap.** Switch from OSM to OS Maps API "Light" style + CSS
-  grayscale filter. Needs `VITE_OS_API_KEY` (free OS Data Hub signup, set as
-  GH Pages secret + injected at build). Domain-restrict the key in the OS
-  console so a leaked client-side key can't be abused.
-- **Open Graph image.** Bake a 1200×630 share card at cron time alongside the
-  AI-describer render. Plus `og:title` / `og:description` / `og:image` meta
-  in `index.html` so links unfurl with the latest answer.
-
 ## Modelling — done
-See README and STATUS. Drag, Coriolis, spin drift, Earth curvature, winds aloft,
-density via effective surface T, tide-aware muzzle, CEP with gun + forecast
-components.
+Drag, Coriolis, spin drift, Earth curvature, winds aloft (with humidity), air
+density via the effective surface T fit, tide-aware muzzle, powder/magazine
+temperature (Cordite SC sensitivity, magazine temp = Open-Meteo
+`soil_temperature_28_to_100cm` thermal-mass proxy), shell-weight PE,
+DEM-aware ground intersection (EA LIDAR Composite DTM 1 m, downsampled to
+5 m, bundled at `public/dem/`), CEP combining gun dispersion with real
+ICON-EPS forecast spread + wind-gust margin.
+
+## UX — done
+B&W single-serving-site layout, AI vision describer (Claude Sonnet 4.6 reading
+the rendered impact map), ghost trail of past calculations, Storm Éowyn replay,
+GoatCounter visit counter, OG share card regenerated each cron tick (1200×630
+greyscale, scoped to the CEP) — meta tags point at the raw URL so unfurls
+always see the latest without a Pages redeploy.
 
 ## Modelling — not planned
 - **5-DOF / Modified Point Mass** (aerodynamic jump, yaw of repose, Magnus).
@@ -52,6 +35,10 @@ components.
 - **Per-tube calibrated MV / tube wear.** Belfast hasn't fired since the late
   1950s; service-life MV (823 m/s vs 841 m/s new-gun) is the right de-rated
   number. Live tube wear is not applicable to a preserved museum gun.
+- **OS Maps basemap.** Tried OS Maps API "Light" + greyscale filter; looked
+  worse than OSM-with-filter in practice, so reverted. The plumbing path
+  (VITE_OS_API_KEY at build, OS Data Hub key + domain restriction) is
+  documented in git history if anyone wants to retry with a different style.
 
 ## UX — not planned (parked for later)
 - Permalink to a specific past tick (`?t=ISO`).
