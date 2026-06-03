@@ -144,7 +144,10 @@
       src="//gc.zgo.at/count.js"
     ></script>
     <script>
-      fetch('https://silentkinfolk.goatcounter.com/counter/TOTAL.json')
+      // %2F = root path "/". GoatCounter's TOTAL aggregator returns 0 on this
+      // site (low-volume / new-site quirk on their end). Root-path count tracks
+      // the dashboard total within ±1 for a single-page site.
+      fetch('https://silentkinfolk.goatcounter.com/counter/%2F.json')
         .then((r) => r.json())
         .then((d) => {
           const el = document.getElementById('visits-count');
