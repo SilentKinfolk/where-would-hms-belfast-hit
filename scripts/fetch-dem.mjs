@@ -8,14 +8,15 @@
 // Re-run if the target ever moves or you want a different resolution. The
 // committed file is the source of truth — the cron never touches the WCS.
 //
-// Binary format (little-endian):
-//   bytes 0..3   ASCII magic "DEM1"
-//   bytes 4..11  uint16 width, uint16 height, uint16 cellSizeCm, uint16 reserved
-//   bytes 12..27 float64 latMin, latMax  (decimal degrees, WGS84)
-//   bytes 28..43 float64 lonMin, lonMax
-//   bytes 44..47 int16 elevOffsetCm  (baseline added back to stored values)
-//   bytes 48..49 int16 noDataValue   (raw stored value used as no-data)
-//   bytes 52..   uint16[width * height] elevationDeciM (height above offset, *10 m)
+// Binary format (little-endian) — see src/dem.js loadDem for the reader:
+//   bytes 0..3    ASCII magic "DEM1"
+//   bytes 4..5    uint16 width   (columns)
+//   bytes 6..7    uint16 height  (rows)
+//   bytes 8..15   float64 cellSizeM    (grid spacing in metres)
+//   bytes 16..23  float64 eastingMin   (BNG easting of column 0)
+//   bytes 24..31  float64 northingMax  (BNG northing of row 0; top-left origin, row 0 = north)
+//   bytes 32..    uint16[width * height] elevation in deci-metres (value * 0.1 = m AOD),
+//                 row-major; 0xffff marks no-data
 
 import { writeFile, mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';

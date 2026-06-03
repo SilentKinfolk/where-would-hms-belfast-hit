@@ -1,6 +1,6 @@
 // Pre-render the live answer + ghost trail server-side.
 //
-// Run by .github/workflows/log-impact.yml every 30 min. Writes public/impacts.json
+// Run by .github/workflows/fire-the-guns.yml (cron 7,37 * * * *). Writes public/impacts.json
 // as { latest, history }: `latest` is the full ImpactResult the site renders
 // verbatim (no in-browser compute on the critical path); `history` is the
 // compact ghost trail. On each tick the previous `latest` is demoted into

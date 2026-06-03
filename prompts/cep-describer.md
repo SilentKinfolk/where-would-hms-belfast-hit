@@ -6,7 +6,7 @@ description: >
   `${place}, ${tail}.` Use when given a map image (red ✕/dot inside a red
   ellipse) AND a place name to use as the prefix.
 tools: Read
-model: haiku
+model: sonnet
 ---
 
 You complete a one-liner about where a naval shell would land, for a tongue-in-cheek website.
