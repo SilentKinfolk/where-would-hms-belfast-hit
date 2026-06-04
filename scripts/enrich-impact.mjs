@@ -9,10 +9,10 @@
 //                         only writes the casual locator aside, which is
 //                         concatenated here. Locality is dropped.
 //
-// When `prevLatest` is supplied AND the new impact sits within REUSE_EDGE_BUFFER_M
-// of the prior CEP edge AND Nominatim returned the same `place.place`, the
-// prior description is reused verbatim — no Claude call. Saves ~$0.004/tick
-// on duplicate Haiku renders.
+// When `prevLatest` is supplied AND the new impact dot is within REUSE_DRIFT_M
+// of the prior dot AND Nominatim returned the same `place.place`, the prior
+// description is reused verbatim — no Claude call. Saves a render on ticks where
+// the dot barely moved.
 
 import { writeFile, mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -29,10 +29,13 @@ const NOMINATIM_UA =
 
 const MODEL = process.env.DESCRIBE_MODEL || 'claude-sonnet-4-6';
 
-// Slack past the prior CEP edge before a new Claude call is worth it. The
-// rendered map shifts very little within this window, so the tail Claude wrote
-// last tick still describes the spot under the dot.
-const REUSE_EDGE_BUFFER_M = 50;
+// How far the impact dot may drift from the previous tick before its one-liner
+// goes stale and a fresh Claude image-read earns its keep. Deliberately a fixed
+// distance, NOT tied to cepM: the CEP measures fall-of-shot spread, but the line
+// describes the feature *under the dot*, and that changes once the dot moves off
+// it — however wide or narrow the dispersion happens to be. ~60 m is about
+// golf-hole / building / junction scale.
+const REUSE_DRIFT_M = 60;
 
 // Tail-only prompt. The proper noun is pinned by Nominatim and concatenated as
 // a prefix here; the model's only job is the casual locator aside.
@@ -145,19 +148,19 @@ async function fetchPlace(lat, lon) {
   return buildLabel(await res.json());
 }
 
-// Reuse the prior tick's description verbatim when the new impact has barely
-// moved AND the Nominatim place hasn't flipped. Both conditions matter: a 30 m
-// drift across a road boundary changes the proper noun even if the map looks
-// almost identical, and the cached prefix would then be wrong.
+// Reuse the prior tick's description verbatim when the impact dot has barely
+// moved AND the Nominatim place hasn't flipped. Both conditions matter: a drift
+// across a road boundary changes the proper noun even if the map looks almost
+// identical, and the cached prefix would then be wrong. The move is measured
+// centre-dot to centre-dot — this tick's impact against last tick's.
 function canReuseDescription(result, prev) {
   if (!prev?.description || !prev?.place || !result.place) return false;
   if (result.place.place !== prev.place.place) return false;
-  if (!Number.isFinite(prev.cepM)) return false;
   const d = distanceMeters(
     { lat: result.impact.lat, lon: result.impact.lon },
     { lat: prev.impact.lat, lon: prev.impact.lon }
   );
-  return d <= prev.cepM + REUSE_EDGE_BUFFER_M;
+  return d <= REUSE_DRIFT_M;
 }
 
 // Defensive: if the model echoed the prefix or added punctuation, strip it so
@@ -244,9 +247,7 @@ export async function enrichImpact(result, prevLatest = null) {
       )
     );
     console.log(
-      `Reusing previous description (impact moved ${d} m, within prev CEP ${Math.round(
-        prevLatest.cepM
-      )} m + ${REUSE_EDGE_BUFFER_M} m): "${result.description}"`
+      `Reusing previous description (dot moved ${d} m, within ${REUSE_DRIFT_M} m): "${result.description}"`
     );
     return;
   }
