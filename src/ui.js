@@ -54,7 +54,7 @@ const updateCondLine = () => {
 export function renderGunInfo() {
   $('gun-type').textContent = GUN.designation;
   $('gun-shell').textContent = `${GUN.shellMassLb} lb (${GUN.shellMassKg} kg)`;
-  $('gun-mv').textContent = `${GUN.muzzleVelocityMs} m/s (new-gun) · ${GUN.drag.modelMvMs} m/s (service)`;
+  $('gun-mv').textContent = `${GUN.drag.modelMvMs} m/s (service) · ${GUN.muzzleVelocityMs} m/s (new-gun)`;
   const p = GUN.propellant;
   if ($('gun-propellant') && p) {
     $('gun-propellant').textContent =

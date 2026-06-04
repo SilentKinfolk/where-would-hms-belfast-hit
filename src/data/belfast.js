@@ -60,10 +60,11 @@ export const GUN = {
   // within ~1.3% on range, and matches the tabulated time-of-flight, striking
   // velocity and angle of fall closely (see scripts/calibrate.mjs).
   //
-  // NOTE on velocity: the NavWeaps range table is quoted for MV = 2,700 fps
-  // (823 m/s) — the service / fire-control-table velocity — which is what the
-  // ballistic model uses (modelMvMs). The 2,758 fps (841 m/s) above is the
-  // higher "new gun" muzzle velocity, kept for the spec display.
+  // NOTE on velocity: the NavWeaps range-table header reads verbatim "Range of
+  // CPBC 112 lbs. projectiles for MV = 2,700 fps (823 mps)" — the service /
+  // fire-control velocity, which is what the ballistic model uses (modelMvMs).
+  // The 2,758 fps (841 m/s) above is the higher "new gun" muzzle velocity, kept
+  // for the spec display. (Header re-verified against the source page 2026-06.)
   drag: {
     table: 'G7',
     ballisticCoefficient: 2.82,

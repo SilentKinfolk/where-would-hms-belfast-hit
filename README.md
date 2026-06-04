@@ -16,7 +16,7 @@ that fixed laying would land in today's weather.
 | Firing origin | HMS Belfast forward turrets — 51.50676°N, 0.08219°W |
 | Target        | London Gateway services — 51.63107°N, 0.26473°W |
 | Range/bearing | ~18.69 km on bearing ~318° |
-| Gun           | BL 6"/50 Mk XXIII — 112 lb shell, ~841 m/s, 23.3 km max range |
+| Gun           | BL 6"/50 Mk XXIII — 112 lb shell, 823 m/s service MV (841 new-gun), 23.3 km max range |
 
 ## Run it
 
@@ -182,9 +182,9 @@ not.
 - **Cordite SC temperature sensitivity.** Currently a generic ~0.8 m/s per °C. The
   real figure for this charge sits in Admiralty propellant records, or with an
   ordnance historian.
-- **Muzzle velocity and shell geometry.** Confirm which muzzle velocity the range
-  table is quoted at (2,700 vs 2,758 ft/s), and the shell's true length and centre
-  of gravity (the spin-drift calc assumes 27 inches). From the original drawings.
+- **Shell length and centre of gravity.** The spin-drift calc assumes 27 inches;
+  the shell's true length and CoG would replace that. From the original drawings.
+  (Range-table MV is settled: the NavWeaps table is computed for 2,700 fps / 823 m/s.)
 
 ## Credits
 

@@ -27,7 +27,7 @@ The useful framing: the sim cleanly separates *where the shell lands* from *how 
 - `shellWeightPE_kg` is dead code: contributes exactly 0 m and burns 2 of the 6 engine fires per dispersion call. Either wire in the MV/BC coupling it implies, or drop it.
 - Density is sampled uniformly along range instead of weighted by drag impulse (ρv²): a ~3-9 m one-way bias on non-ICAO days.
 - The met finite-differences are one-sided (wind dir +10°, etc.); central differencing is sub-metre but cheap correctness insurance.
-- Two stale docstrings: `weather.js` ~line 372 says humidity aloft isn't modelled (it is, via the obs-mean density fit), and the 2758-vs-2700 fps NOTE probably mislabels which MV the NavWeaps table is quoted at.
+- One stale docstring: `weather.js` ~line 372 says humidity aloft isn't modelled (it is, via the obs-mean density fit). (The 2758-vs-2700 fps NOTE in belfast.js was double-checked against the NavWeaps page header — "Range ... for MV = 2,700 fps (823 mps)" — and is correct, not a mislabel.)
 - Displayed terminal stats (ToF, striking velocity, angle of fall) carry a few-percent G7-shape bias vs NavWeaps. Cosmetic, doesn't touch the impact point.
 
 ## Checked and genuinely fine (don't chase these)
