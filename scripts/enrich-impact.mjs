@@ -23,6 +23,7 @@ import StaticMaps from 'staticmaps';
 
 import { destinationPoint, distanceMeters } from '../src/geo.js';
 import { buildLabel } from '../src/describe.js';
+import { fetchRetry } from '../src/fetch-retry.js';
 
 const NOMINATIM_UA =
   'belfast-ballistics/1.0 (https://github.com/SilentKinfolk/where-would-hms-belfast-hit)';
@@ -143,7 +144,7 @@ async function fetchPlace(lat, lon) {
   const url =
     `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}` +
     `&format=jsonv2&zoom=18&addressdetails=1`;
-  const res = await fetch(url, { headers: { 'User-Agent': NOMINATIM_UA } });
+  const res = await fetchRetry(url, { headers: { 'User-Agent': NOMINATIM_UA } });
   if (!res.ok) throw new Error(`Nominatim HTTP ${res.status}`);
   return buildLabel(await res.json());
 }

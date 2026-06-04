@@ -2,6 +2,8 @@
 // Returns current surface conditions plus a winds-aloft profile (wind vs
 // geopotential altitude) covering the shell's ~3 km climb.
 
+import { fetchRetry } from './fetch-retry.js';
+
 const FORECAST = 'https://api.open-meteo.com/v1/forecast';
 const ELEVATION = 'https://api.open-meteo.com/v1/elevation';
 const ENSEMBLE = 'https://ensemble-api.open-meteo.com/v1/ensemble';
@@ -32,7 +34,7 @@ export async function fetchWeather(lat, lon) {
     `&current=temperature_2m,relative_humidity_2m,surface_pressure,wind_speed_10m,wind_direction_10m,wind_gusts_10m,soil_temperature_28_to_100cm` +
     `&hourly=${hourly}&wind_speed_unit=ms&timezone=GMT&forecast_days=1`;
 
-  const res = await fetch(url);
+  const res = await fetchRetry(url);
   if (!res.ok) throw new Error(`Open-Meteo forecast HTTP ${res.status}`);
   const d = await res.json();
   const c = d.current;
@@ -128,7 +130,7 @@ export async function fetchHistoricalWeather(lat, lon, date, hour) {
     `${HISTORICAL}?latitude=${lat}&longitude=${lon}&start_date=${date}&end_date=${date}` +
     `&hourly=${hourly}&wind_speed_unit=ms&timezone=GMT`;
 
-  const res = await fetch(url);
+  const res = await fetchRetry(url);
   if (!res.ok) throw new Error(`Open-Meteo historical HTTP ${res.status}`);
   const d = await res.json();
   const H = d.hourly;
@@ -214,7 +216,7 @@ export async function fetchEnsembleUncertainty(lat, lon) {
   });
   let d;
   try {
-    const res = await fetch(`${ENSEMBLE}?${params}`);
+    const res = await fetchRetry(`${ENSEMBLE}?${params}`);
     if (!res.ok) return null;
     d = await res.json();
   } catch {
@@ -279,7 +281,7 @@ const EA_TOWER_PIER = 'https://environment.data.gov.uk/flood-monitoring/id/stati
 
 /** Latest measured Thames tide level near the ship, or null on failure. */
 export async function fetchTide() {
-  const res = await fetch(EA_TOWER_PIER);
+  const res = await fetchRetry(EA_TOWER_PIER);
   if (!res.ok) throw new Error(`EA tide HTTP ${res.status}`);
   const d = await res.json();
   const measures = [].concat(d.items?.measures ?? []);
@@ -297,7 +299,7 @@ export async function fetchTide() {
 export async function fetchElevations(points) {
   const lats = points.map((p) => p.lat).join(',');
   const lons = points.map((p) => p.lon).join(',');
-  const res = await fetch(`${ELEVATION}?latitude=${lats}&longitude=${lons}`);
+  const res = await fetchRetry(`${ELEVATION}?latitude=${lats}&longitude=${lons}`);
   if (!res.ok) throw new Error(`Open-Meteo elevation HTTP ${res.status}`);
   const d = await res.json();
   return d.elevation;
