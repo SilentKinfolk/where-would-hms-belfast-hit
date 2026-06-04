@@ -3,7 +3,7 @@
 // pure and trivially testable.
 
 export const PE_PER_SIGMA = 0.6745; // probable error = 0.6745 * sigma
-// Semi-axis of the 2-D ellipse containing 50% of shots, in units of sigma:
+// Semi-axis of the 2-D ellipse containing 50% of the landing probability, in units of sigma:
 // solves 1 - exp(-s^2/2) = 0.5  ->  s = sqrt(2 ln 2).
 export const ELLIPSE_50_PER_SIGMA = Math.sqrt(2 * Math.LN2); // ~1.1774
 
@@ -27,10 +27,10 @@ function gaussian(rand) {
 }
 
 /**
- * Circular Error Probable (radius containing 50% of shots) for a zero-mean
- * bivariate-normal fall of shot with independent standard deviations sigmaX,
- * sigmaY. Computed as the median impact radius of a seeded Monte-Carlo sample —
- * exact for any ellipticity, with no closed-form approximation.
+ * Circular Error Probable (radius containing 50% of the landing probability) for
+ * a zero-mean bivariate-normal fall of shot with independent standard deviations
+ * sigmaX, sigmaY. Computed as the median impact radius of a seeded Monte-Carlo
+ * sample, exact for any ellipticity, with no closed-form approximation.
  */
 export function cepFromSigmas(sigmaX, sigmaY, n = 6000) {
   const rand = mulberry32(0x9e3779b9);

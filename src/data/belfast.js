@@ -88,36 +88,34 @@ export const GUN = {
     note: 'Cordite SC nominal sensitivity; current magazine temperature comes from a soil-temp proxy (see weather.js).'
   },
 
-  // Intrinsic gun dispersion (weather-independent): round-to-round probable
-  // errors propagated through the trajectory to the fall of shot, giving an
-  // elliptical pattern (long in range, narrow in deflection, the classic naval
-  // signature) and an equivalent CEP. PE = 0.6745 * sigma.
+  // Round-to-round uncertainty in where a SINGLE shell lands (this tool models
+  // one shell, never a salvo). We can't know this shell's exact muzzle velocity
+  // or barrel jump, so the predicted impact carries an elliptical uncertainty
+  // zone, long in range and narrow in deflection; its 50% radius is the CEP.
+  // PE = 0.6745 * sigma.
   //
-  // The shell's true probable errors aren't published. These are physically
-  // reasonable estimates, tuned so the modelled range PE (~80 m at ~18.8 km,
-  // ~0.4% of range) matches the documented Town-class spread of ~700 yards
-  // (NavWeaps) at battle range. TUNABLE; refine if real gunnery dispersion
-  // records turn up. These are the random round-to-round terms only. A
-  // systematic bearing/laying bias would shift the whole pattern centre (an
-  // aim-point offset), not scatter shots within it, so it is not included here.
+  // The shell's true probable errors aren't published, so these are physically
+  // reasonable estimates (muzzle velocity dominates the range axis). They want a
+  // real range table to replace them: a BR.224 6"/50 table would give measured
+  // dispersion and a drift column. See TODO.md / README.
+  //
+  // NOT covered here: uncertainty about the laying itself. Elevation and azimuth
+  // are solved-to-hit, not measured on the ship, so the true single-shell zone
+  // is wider than this until the real laying is gathered. Left as a data gap
+  // rather than guessed at.
   dispersion: {
-    muzzleVelocityPE_ms: 3.0, // round-to-round MV probable error (~0.36% of MV)
+    muzzleVelocityPE_ms: 3.0, // round-to-round MV PE; ~0.36% of MV, top of the 0.2-0.4% cordite range
     elevationLayingPE_mil: 1.0, // quadrant-elevation laying + barrel jump PE
-    // Round-to-round cross-line scatter only (gun-to-gun jump, training slack,
-    // ballistic deflection), ~0.3 mil. The larger systematic bearing/centering
-    // error is deliberately excluded: it offsets the pattern centre rather than
-    // widening the per-shot spread, and folding it in over-rounds the ellipse.
-    deflectionDispersionPE_mil: 0.3
-    // Shell-weight grading isn't a separate term: this BC-based drag model is
-    // governed by the ballistic coefficient and muzzle velocity, so a weight
-    // perturbation at fixed BC has no effect on range (dR/dm = 0 in the engine).
-    // Its real-world effect is subsumed into the MV probable error above.
+    deflectionDispersionPE_mil: 0.3, // round-to-round cross-line scatter (gun jump, training slack)
+    // No shell-weight term: this BC-based drag model is governed by the ballistic
+    // coefficient and muzzle velocity, so a weight perturbation at fixed BC has no
+    // effect on range (dR/dm = 0 in the engine); its effect is subsumed into MV PE.
   }
 };
 
 // How well we actually KNOW the current conditions (1-sigma). The live met is an
 // observation/forecast with error, and conditions drift between updates; that
-// uncertainty in the inputs becomes uncertainty in the mean point of impact,
+// uncertainty in the inputs becomes uncertainty in the predicted impact point,
 // which (combined with the gun's own dispersion) widens the CEP. Estimates,
 // tunable. Wind perturbations are applied to the whole vertical profile at once
 // (a correlated, systematic error — the realistic worst case for fall of shot).

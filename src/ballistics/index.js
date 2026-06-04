@@ -221,7 +221,7 @@ function resolveForecastSigmas(weather, ensembleSigmas) {
 }
 
 /**
- * Uncertainty in the mean point of impact from imperfect knowledge of the
+ * Uncertainty in the predicted impact point from imperfect knowledge of the
  * conditions: propagate the forecast wind-speed, wind-direction and temperature
  * errors through the engine (central finite differences, so a nonlinear
  * response, mainly wind direction at crosswind angles, doesn't bias the slope),

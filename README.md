@@ -47,6 +47,21 @@ npm run dev                                  # Vite forwards /api/* to it
 
 See [TODO.md](TODO.md) for open questions and remaining work.
 
+## What's still estimated
+
+This models a single shell, not a salvo: where one shell would land, with the
+ellipse showing how uncertain that single point is. Two inputs would move it from
+a grounded estimate to something validated, and both need real-world data:
+
+- **The real gun laying.** Bearing (~318°) and elevation (~24.9°) come from
+  satellite imagery, solved to hit the target under standard air, not measured
+  from the ship. Elevation is the sensitive one: the impact moves ~340 m per
+  degree, so a true "as it sits" answer needs the barrel angle and bearing read
+  off the mounting at the museum.
+- **A real range table.** Drag, drift and round-to-round dispersion are fitted or
+  estimated. An RN range table for the 6"/50 Mk XXIII (BR.224 at TNA Kew or the
+  IWM library) would give measured drift and dispersion to replace them.
+
 ## Credits
 
 - Gun & range tables: [NavWeaps](http://www.navweaps.com/Weapons/WNBR_6-50_mk23.php)

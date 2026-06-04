@@ -78,7 +78,7 @@ export function createMap(elementId) {
 
     dispersionLayer.clearLayers();
 
-    // 50% dispersion ellipse — where half the shots land (long in range).
+    // 50% zone: where the single shell most likely lands (long in range).
     if (result.ellipse) {
       L.polygon(
         ellipseRing(
@@ -89,7 +89,7 @@ export function createMap(elementId) {
         ),
         { color: '#111', weight: 1.2, fillColor: '#111', fillOpacity: 0.12 }
       )
-        .bindPopup('<strong>50% dispersion zone</strong><br>half of shots land in here')
+        .bindPopup('<strong>50% zone</strong><br>the shell lands in here about half the time')
         .addTo(dispersionLayer);
     }
 
@@ -109,7 +109,7 @@ export function createMap(elementId) {
     if (impactMarker) impactMarker.remove();
     impactMarker = L.marker(impactLatLng, { icon: ICONS.impact })
       .addTo(map)
-      .bindPopup('<strong>Mean point of impact</strong>');
+      .bindPopup('<strong>Most likely impact point</strong>');
 
     map.fitBounds(L.latLngBounds([belfastLatLng, impactLatLng]).pad(0.35));
   }
