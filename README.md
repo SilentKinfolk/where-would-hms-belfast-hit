@@ -41,6 +41,26 @@ the Claude vision describer server-side, and bakes the result into
 
 ```mermaid
 flowchart TD
+    IN["Live inputs: weather, tide, elevation, ensemble<br/>Fixed inputs: gun laying, DEM tile"]
+    CRON["GitHub Actions cron, every 30 min<br/>fire-the-guns.yml"]
+    BAL["Ballistics, js-ballistics WASM<br/>impact point + CEP ellipse"]
+    AI["Claude vision reads the rendered map<br/>writes the one-line description"]
+    OUT[["public/impacts.json<br/>committed + pushed to main"]]
+    WEB["Browser fetches + draws on Leaflet<br/>no compute, no API key"]
+
+    IN --> CRON --> BAL --> AI --> OUT --> WEB
+
+    classDef ai fill:#ffe3f1,stroke:#c2186a,stroke-width:2px,color:#111;
+    class AI ai;
+```
+
+Pink = the Claude vision call. Expand for the full, stage-by-stage version:
+
+<details>
+<summary>Full pipeline — every stage</summary>
+
+```mermaid
+flowchart TD
     subgraph SRC["Live data, fetched every tick"]
         direction TB
         WX["Open-Meteo Forecast<br/>surface + winds-aloft profile<br/>+ soil temp as magazine proxy"]
@@ -112,6 +132,8 @@ flowchart TD
 
 Blue = live data sources · pink = the Claude vision call · green = the published
 artifacts the browser reads.
+
+</details>
 
 ## AI impact descriptions
 
