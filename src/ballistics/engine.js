@@ -278,39 +278,32 @@ export async function solveElevationForRange(targetRangeM, conditions = {}) {
  * Intrinsic gun dispersion at the given laying, propagated through the
  * trajectory. Returns 1-sigma standard deviations of the fall of shot (metres)
  * in the range (down the line of fire) and deflection (cross) directions.
- * Range scatter combines round-to-round muzzle-velocity variation, elevation-
- * laying error, and shell-weight grading; deflection comes from lateral laying
- * error.
+ * Range scatter combines round-to-round muzzle-velocity variation and
+ * elevation-laying/jump error; deflection is the round-to-round cross-line
+ * scatter. Shell-weight grading isn't a separate term: this BC-based drag model
+ * is governed by the ballistic coefficient and muzzle velocity, so a weight
+ * perturbation at fixed BC has no effect on range (its real effect is subsumed
+ * into the MV PE).
  * @returns {Promise<{sigmaRangeM:number, sigmaDefM:number}>}
  */
 export async function computeDispersion(elevationDeg, rangeM, conditions = {}) {
   const d = GUN.dispersion;
   const baseMv = conditions.mvMs ?? GUN.drag.modelMvMs;
-  const baseMass = conditions.shellMassKg ?? GUN.shellMassKg;
 
-  // Trajectory sensitivities by central finite difference (6 extra fires).
+  // Trajectory sensitivities by central finite difference (4 extra fires).
   const dv = 5; // m/s
   const dq = 0.5; // deg
-  const dm = 0.5; // kg — comfortably wider than the 50 g PE so finite diff is well-conditioned
   const rHiV = (await fireAtElevation(elevationDeg, { ...conditions, mvMs: baseMv + dv })).rangeM;
   const rLoV = (await fireAtElevation(elevationDeg, { ...conditions, mvMs: baseMv - dv })).rangeM;
   const dR_dv = (rHiV - rLoV) / (2 * dv); // m per (m/s)
   const rHiQ = (await fireAtElevation(elevationDeg + dq, conditions)).rangeM;
   const rLoQ = (await fireAtElevation(elevationDeg - dq, conditions)).rangeM;
   const dR_dQEdeg = (rHiQ - rLoQ) / (2 * dq); // m per degree
-  const rHiM = (await fireAtElevation(elevationDeg, { ...conditions, shellMassKg: baseMass + dm })).rangeM;
-  const rLoM = (await fireAtElevation(elevationDeg, { ...conditions, shellMassKg: baseMass - dm })).rangeM;
-  const dR_dMassKg = (rHiM - rLoM) / (2 * dm); // m per kg
 
   const sigMv = d.muzzleVelocityPE_ms / PE_PER_SIGMA;
   const sigQEdeg = d.elevationLayingPE_mil * MIL_RAD / DEG / PE_PER_SIGMA;
-  const sigMassKg = (d.shellWeightPE_kg ?? 0) / PE_PER_SIGMA;
-  const sigmaRangeM = Math.hypot(
-    dR_dv * sigMv,
-    dR_dQEdeg * sigQEdeg,
-    dR_dMassKg * sigMassKg
-  );
-  const sigmaDefM = (rangeM * d.deflectionLayingPE_mil * MIL_RAD) / PE_PER_SIGMA;
+  const sigmaRangeM = Math.hypot(dR_dv * sigMv, dR_dQEdeg * sigQEdeg);
+  const sigmaDefM = (rangeM * d.deflectionDispersionPE_mil * MIL_RAD) / PE_PER_SIGMA;
   return { sigmaRangeM, sigmaDefM };
 }
 

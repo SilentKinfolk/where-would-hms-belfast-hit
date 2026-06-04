@@ -369,8 +369,10 @@ function atmoAtAltitude(profile, altitudeM) {
  * and geopotential height at standard pressure levels); the projection onto a
  * single parameter is the only modelling step.
  *
- * Humidity aloft is not modelled — we leave the surface humidity as fetched.
- * The dry-density approximation is good to ~0.5 % across realistic profiles.
+ * Humidity aloft IS used on the observed side: the per-level relative humidity
+ * feeds the moist-air density mean below. The ICAO scoring column reuses the
+ * surface humidity, matching how the engine applies one surface humidity ratio
+ * up its column; the residual profile-shape error from that is well under 1 %.
  */
 export function effectiveSurfaceTempC(profile, trajPoints, surface) {
   const hasAloft = profile?.some((p) => Number.isFinite(p.tempC) && Number.isFinite(p.pressureHpa));

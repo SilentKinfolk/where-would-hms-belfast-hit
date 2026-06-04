@@ -88,25 +88,30 @@ export const GUN = {
     note: 'Cordite SC nominal sensitivity; current magazine temperature comes from a soil-temp proxy (see weather.js).'
   },
 
-  // Intrinsic gun dispersion (weather-independent). These input probable errors
-  // are propagated through the trajectory engine to the fall of shot, giving an
-  // elliptical pattern (long in range, narrow in deflection — the classic naval
-  // signature) and an equivalent CEP.
+  // Intrinsic gun dispersion (weather-independent): round-to-round probable
+  // errors propagated through the trajectory to the fall of shot, giving an
+  // elliptical pattern (long in range, narrow in deflection, the classic naval
+  // signature) and an equivalent CEP. PE = 0.6745 * sigma.
   //
   // The shell's true probable errors aren't published. These are physically
   // reasonable estimates, tuned so the modelled range PE (~80 m at ~18.8 km,
   // ~0.4% of range) matches the documented Town-class spread of ~700 yards
-  // (NavWeaps) at battle range. They are TUNABLE and should be refined if real
-  // gunnery dispersion records turn up. PE = 0.6745 * sigma.
+  // (NavWeaps) at battle range. TUNABLE; refine if real gunnery dispersion
+  // records turn up. These are the random round-to-round terms only. A
+  // systematic bearing/laying bias would shift the whole pattern centre (an
+  // aim-point offset), not scatter shots within it, so it is not included here.
   dispersion: {
     muzzleVelocityPE_ms: 3.0, // round-to-round MV probable error (~0.36% of MV)
     elevationLayingPE_mil: 1.0, // quadrant-elevation laying + barrel jump PE
-    deflectionLayingPE_mil: 1.0, // lateral (bearing) laying PE
-    // Shell-weight grading: RN ordnance was lot-graded with weight stencilled
-    // on each round. Within a lot, round-to-round variation is small (~50 g);
-    // between lots, weight bands span ±1 lb (~0.45 kg). The 50 g random PE is
-    // the right per-shot figure since fire-control corrects for lot weight.
-    shellWeightPE_kg: 0.05
+    // Round-to-round cross-line scatter only (gun-to-gun jump, training slack,
+    // ballistic deflection), ~0.3 mil. The larger systematic bearing/centering
+    // error is deliberately excluded: it offsets the pattern centre rather than
+    // widening the per-shot spread, and folding it in over-rounds the ellipse.
+    deflectionDispersionPE_mil: 0.3
+    // Shell-weight grading isn't a separate term: this BC-based drag model is
+    // governed by the ballistic coefficient and muzzle velocity, so a weight
+    // perturbation at fixed BC has no effect on range (dR/dm = 0 in the engine).
+    // Its real-world effect is subsumed into the MV probable error above.
   }
 };
 

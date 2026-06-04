@@ -223,60 +223,56 @@ function resolveForecastSigmas(weather, ensembleSigmas) {
 /**
  * Uncertainty in the mean point of impact from imperfect knowledge of the
  * conditions: propagate the forecast wind-speed, wind-direction and temperature
- * errors through the engine (one-sided finite differences against the base
- * shot), returning 1-sigma range/deflection contributions in metres.
+ * errors through the engine (central finite differences, so a nonlinear
+ * response, mainly wind direction at crosswind angles, doesn't bias the slope),
+ * returning 1-sigma range/deflection contributions in metres.
  */
-async function metUncertaintySigmas({ laying, weather, profilePts, conditions, shot, ensembleSigmas }) {
+async function metUncertaintySigmas({ laying, weather, profilePts, conditions, ensembleSigmas }) {
   const sigmas = resolveForecastSigmas(weather, ensembleSigmas);
   const az = laying.azimuthDeg;
   const fireWith = (override) =>
     fireAtElevation(laying.elevationDeg, { ...conditions, ...override });
+  const windsFrom = (mut) => makeWindLayers(weather.profile.map(mut), profilePts, az);
 
-  // Wind speed: nudge every level up by dws m/s.
+  // Wind speed: nudge every level by ±dws m/s.
   const dws = 2;
-  const wsWinds = makeWindLayers(
-    weather.profile.map((p) => ({ ...p, speedMs: Math.max(0, p.speedMs + dws) })),
-    profilePts,
-    az
-  );
-  const sWs = await fireWith({ winds: wsWinds });
+  const sWsHi = await fireWith({ winds: windsFrom((p) => ({ ...p, speedMs: Math.max(0, p.speedMs + dws) })) });
+  const sWsLo = await fireWith({ winds: windsFrom((p) => ({ ...p, speedMs: Math.max(0, p.speedMs - dws) })) });
 
-  // Wind direction: rotate every level by ddir degrees.
+  // Wind direction: rotate every level by ±ddir degrees.
   const ddir = 10;
-  const wdWinds = makeWindLayers(
-    weather.profile.map((p) => ({ ...p, dirFromDeg: (p.dirFromDeg + ddir + 360) % 360 })),
-    profilePts,
-    az
-  );
-  const sWd = await fireWith({ winds: wdWinds });
+  const sWdHi = await fireWith({ winds: windsFrom((p) => ({ ...p, dirFromDeg: (p.dirFromDeg + ddir + 360) % 360 })) });
+  const sWdLo = await fireWith({ winds: windsFrom((p) => ({ ...p, dirFromDeg: (p.dirFromDeg - ddir + 360) % 360 })) });
 
-  // Temperature (air density): nudge the WHOLE profile by dT °C (correlated
+  // Temperature (air density): shift the WHOLE profile by ±dT °C (correlated
   // forecast bias) and re-derive the effective surface T from the shifted
   // observations. Perturbing surface T alone would be near-invisible because
   // the effective T is fitted to the aloft profile.
   const dT = 5;
-  const warmedProfile = weather.profile.map((p) => ({
-    ...p,
-    tempC: Number.isFinite(p.tempC) ? p.tempC + dT : p.tempC
-  }));
-  const warmedSurface = { ...weather.surface, tempC: weather.surface.tempC + dT };
-  const tEffWarm = effectiveSurfaceTempC(warmedProfile, profilePts, warmedSurface);
-  const sT = await fireWith({
-    atmo: makeAtmo({ ...warmedSurface, tempC: tEffWarm })
-  });
+  const tempShot = async (sign) => {
+    const prof = weather.profile.map((p) => ({
+      ...p,
+      tempC: Number.isFinite(p.tempC) ? p.tempC + sign * dT : p.tempC
+    }));
+    const surf = { ...weather.surface, tempC: weather.surface.tempC + sign * dT };
+    const tEff = effectiveSurfaceTempC(prof, profilePts, surf);
+    return fireWith({ atmo: makeAtmo({ ...surf, tempC: tEff }) });
+  };
+  const sTHi = await tempShot(1);
+  const sTLo = await tempShot(-1);
 
-  const dR = (s, d) => (s.rangeM - shot.rangeM) / d;
-  const dD = (s, d) => (s.windageM - shot.windageM) / d;
+  const dR = (hi, lo, d) => (hi.rangeM - lo.rangeM) / (2 * d);
+  const dD = (hi, lo, d) => (hi.windageM - lo.windageM) / (2 * d);
   return {
     sigmaRangeM: Math.hypot(
-      dR(sWs, dws) * sigmas.windSpeedMs,
-      dR(sWd, ddir) * sigmas.windDirDeg,
-      dR(sT, dT) * sigmas.tempC
+      dR(sWsHi, sWsLo, dws) * sigmas.windSpeedMs,
+      dR(sWdHi, sWdLo, ddir) * sigmas.windDirDeg,
+      dR(sTHi, sTLo, dT) * sigmas.tempC
     ),
     sigmaDefM: Math.hypot(
-      dD(sWs, dws) * sigmas.windSpeedMs,
-      dD(sWd, ddir) * sigmas.windDirDeg,
-      dD(sT, dT) * sigmas.tempC
+      dD(sWsHi, sWsLo, dws) * sigmas.windSpeedMs,
+      dD(sWdHi, sWdLo, ddir) * sigmas.windDirDeg,
+      dD(sTHi, sTLo, dT) * sigmas.tempC
     ),
     sigmas
   };
