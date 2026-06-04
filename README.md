@@ -150,41 +150,14 @@ ANTHROPIC_API_KEY=sk-ant-... npm run proxy   # :8787
 npm run dev                                  # Vite forwards /api/* to it
 ```
 
-See [TODO.md](TODO.md) for open questions and remaining work.
-
 ## Research this could spawn
 
-This models a single shell, not a salvo. The engine computes correctly from its
-inputs, but several of those inputs are estimates or assumptions. None needs more
-code: each needs real-world data, a measurement, or someone who knows. The gun is
-1930s technology on a museum ship, so this is history held in public archives.
-Modern fire-control data would be sensitive; a WWII cruiser's published gunnery is
-not.
+This models a single shell, not a salvo. The physics is real; the load-bearing
+inputs aren't all measured. The gun laying, the range table, the shell's drag and
+spin drift are estimates, not measurements.
 
-- **The barrel laying, measured on board.** Bearing (~318°) and elevation (~24.9°)
-  are read off satellite imagery and solved to hit the target under standard air,
-  not measured from the mounting. Elevation is the load-bearing one: the impact
-  moves ~340 m per degree. Ask the IWM curators on HMS Belfast.
-- **A range table for the 6"/50 Mk XXIII.** Drag, drift and dispersion are all
-  fitted or estimated. An Admiralty range table (BR.224) lists measured range,
-  drift, striking velocity and dispersion directly. The National Archives (ADM
-  series) at Kew, the IWM library, or a naval-gunnery historian.
-- **The shell's real drag.** The drag curve is a borrowed rifle-bullet shape (G7)
-  with one fitted coefficient. It reproduces the range table to ~1%, but the
-  striking velocity and descent angle it reports run a couple of percent off. A
-  measured curve fixes that: digitise a real 6-inch CPBC shell from drawings or a
-  surviving round, build a model, and run CFD or get spark-range drag-vs-Mach data.
-- **Spin drift.** The least trustworthy number on the map. The engine uses a
-  small-arms formula stretched far past the flight time it was built for; the drift
-  lands straight on the left/right deflection and the range table cannot check it.
-  A real drift column, or a 4-DoF/6-DoF solver run with the shell's true mass and
-  aero data, would validate or replace the ~100 m it currently gives.
-- **Cordite SC temperature sensitivity.** Currently a generic ~0.8 m/s per °C. The
-  real figure for this charge sits in Admiralty propellant records, or with an
-  ordnance historian.
-- **Shell length and centre of gravity.** The spin-drift calc assumes 27 inches;
-  the shell's true length and CoG would replace that. From the original drawings.
-  (Range-table MV is settled: the NavWeaps table is computed for 2,700 fps / 823 m/s.)
+The open list — what to gather, and the archives and people to ask — is in
+**[TODO.md](TODO.md)**.
 
 ## Credits
 
