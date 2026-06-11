@@ -12,7 +12,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.100.1",
+    "@anthropic-ai/sdk": "^0.104.1",
     "js-ballistics": "^3.0.0-beta.2",
     "leaflet": "^1.9.4",
     "staticmaps": "^1.13.1"
