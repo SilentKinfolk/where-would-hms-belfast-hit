@@ -1,0 +1,90 @@
+name: Dependabot auto-merge
+
+# Dependabot opens the pull requests; nothing on this end ever merged them, so
+# they queued up — #4, #5 and #6 sat green and unmerged for six weeks. This
+# closes the loop: once CI passes on a Dependabot branch, squash-merge it and
+# kick the Pages deploy, so the site keeps patching itself while unattended.
+#
+# Every update that passes CI merges, majors included. Holding majors back for
+# review is what produced the six-week queue, and a stale actions/checkout
+# eventually stops working outright. CI runs the tests and a full production
+# build against the bump before this job sees it.
+#
+# The trigger is workflow_run rather than pull_request because main deliberately
+# has no branch protection: fire-the-guns.yml pushes impacts.json straight to
+# main every hour, and a required-checks rule would block that push. Without
+# branch protection GitHub's native auto-merge has no pending requirement to
+# wait on and refuses to enable, so this waits for CI itself.
+
+on:
+  workflow_run:
+    workflows: ['CI']
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write # to dispatch deploy.yml after the merge
+
+concurrency:
+  group: dependabot-automerge
+  cancel-in-progress: false
+
+jobs:
+  merge:
+    if: >-
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.actor.login == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Merge the Dependabot PR that CI just passed
+        id: merge
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          BRANCH: ${{ github.event.workflow_run.head_branch }}
+          TESTED_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          echo "merged=false" >> "$GITHUB_OUTPUT"
+
+          pr=$(gh pr list --repo "$REPO" --head "$BRANCH" --state open \
+                 --json number,author,headRefOid \
+                 --jq '.[0] // empty | "\(.number) \(.author.login) \(.headRefOid)"')
+          if [ -z "$pr" ]; then
+            echo "No open PR on $BRANCH — already merged or closed."
+            exit 0
+          fi
+          read -r num author sha <<<"$pr"
+
+          # Re-check authorship against the PR itself. Trusting the workflow_run
+          # actor alone would let a hand-pushed branch ride in behind the name.
+          case "$author" in
+            'dependabot[bot]' | 'app/dependabot') ;;
+            *)
+              echo "PR #$num is authored by $author, not Dependabot — leaving it."
+              exit 0
+              ;;
+          esac
+
+          # If the branch moved after CI ran, the green tick describes a
+          # different commit. Dependabot's rebase will start a fresh CI run.
+          if [ "$sha" != "$TESTED_SHA" ]; then
+            echo "Branch moved since CI ($TESTED_SHA -> $sha) — leaving #$num."
+            exit 0
+          fi
+
+          echo "Merging #$num ($BRANCH) at $sha"
+          gh pr merge "$num" --repo "$REPO" --squash --delete-branch
+          echo "merged=true" >> "$GITHUB_OUTPUT"
+
+      # A merge performed with GITHUB_TOKEN raises no push event, so deploy.yml
+      # (on: push) never fires for it and Pages would keep serving the old
+      # bundle. Dispatch it explicitly.
+      - name: Redeploy Pages
+        if: steps.merge.outputs.merged == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: gh workflow run deploy.yml --repo "$REPO" --ref main
