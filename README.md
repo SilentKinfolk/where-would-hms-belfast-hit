@@ -150,6 +150,44 @@ ANTHROPIC_API_KEY=sk-ant-... npm run proxy   # :8787
 npm run dev                                  # Vite forwards /api/* to it
 ```
 
+## Keeping itself patched
+
+The site is meant to sit unattended for years, so dependency maintenance runs
+without a human in the loop. Three pieces cover it.
+
+Dependabot proposes updates weekly and immediately for anything with a security
+advisory, configured in [`.github/dependabot.yml`](.github/dependabot.yml).
+`dependabot-automerge.yml` then merges whatever passes CI, majors included, and
+dispatches the Pages deploy. It waits on CI through `workflow_run` rather than
+using GitHub's native auto-merge, because main carries no branch protection on
+purpose: `fire-the-guns.yml` pushes `impacts.json` straight to main every hour
+and a required-checks rule would block that push.
+
+`security-autopatch.yml` covers the case Dependabot structurally cannot.
+Dependabot bumps what `package.json` declares, so a vulnerable package arriving
+through a dependency that pins it exactly has nothing to bump and its advisory
+stays open indefinitely. That is the `sharp` situation: `staticmaps` pins
+`"sharp": "0.33.2"`, its latest release still does, and GHSA-f88m-g3jw-g9cj sat
+open until the pin was forced. The forcing move is a direct dependency plus an
+override that references it:
+
+```json
+"dependencies": { "sharp": "^0.35.3" },
+"overrides":    { "sharp": "$sharp" }
+```
+
+The direct entry is what keeps it autonomous. Dependabot tracks direct
+dependencies, `$sharp` makes the override follow whatever Dependabot bumps that
+entry to, and auto-merge lands the result, so each package needs forcing once.
+[`scripts/auto-patch-security.mjs`](scripts/auto-patch-security.mjs) finds the
+next such package by itself, declines majors, and reverts any batch that fails
+the tests or the build.
+
+Because merges land unreviewed, CI has to cover the code paths that only run in
+the cron. `tests/image-pipeline.test.js` exists for that reason: `sharp` runs
+only inside `renderOgImage()`, so a bad resolution would otherwise surface as a
+silent cron failure hours later instead of a red build.
+
 ## Research this could spawn
 
 This models a single shell, not a salvo. The physics is real; the load-bearing
