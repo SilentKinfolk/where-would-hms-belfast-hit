@@ -1,6 +1,6 @@
 // Shared impacts data — both the live answer (`latest`) and the ghost trail
 // (`history`). The canonical log lives at public/impacts.json on the main
-// branch, refreshed every 30 min by .github/workflows/fire-the-guns.yml; the
+// branch, refreshed hourly by .github/workflows/fire-the-guns.yml; the
 // browser fetches it straight from raw.githubusercontent.com in production so
 // cron commits don't need a Pages redeploy.
 //

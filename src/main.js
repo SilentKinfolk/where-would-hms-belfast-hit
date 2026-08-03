@@ -11,8 +11,9 @@ import {
 import { describeImpact } from './describe.js';
 import { loadShared } from './history.js';
 
-// Live mode just re-pulls the shared JSON. Cron updates at most every 30 min;
-// 5-min refresh aligns with raw.githubusercontent.com's 5-min CDN cache.
+// Live mode just re-pulls the shared JSON. Cron updates at most hourly; the
+// 5-min refresh aligns with raw.githubusercontent.com's 5-min CDN cache, so a
+// page left open picks up a new tick within five minutes of the cron push.
 const REFRESH_MS = 5 * 60 * 1000;
 
 // Pre-rendered storm replays — see scripts/precompute-storm.mjs. The browser

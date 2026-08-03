@@ -1,6 +1,6 @@
 // Pre-render the live answer + ghost trail server-side.
 //
-// Run by .github/workflows/fire-the-guns.yml (cron 7,37 * * * *). Writes public/impacts.json
+// Run by .github/workflows/fire-the-guns.yml (cron 37 * * * *). Writes public/impacts.json
 // as { latest, history }: `latest` is the full ImpactResult the site renders
 // verbatim (no in-browser compute on the critical path); `history` is the
 // compact ghost trail. On each tick the previous `latest` is demoted into
@@ -24,7 +24,7 @@ import { enrichImpact, renderOgImageForResult } from './enrich-impact.mjs';
 
 const IMPACTS_PATH = fileURLToPath(new URL('../public/impacts.json', import.meta.url));
 
-const MAX_ENTRIES = 1500; // ~30 days at 30-min cadence (1440), with slack
+const MAX_ENTRIES = 800; // ~30 days at hourly cadence (720), with slack
 const MAX_AGE_MS = 30 * 24 * 3600 * 1000;
 const MIN_GAP_MS = 60 * 1000; // dedup if two runs land within a minute
 

@@ -29,20 +29,20 @@ npm run build    # static bundle in dist/
 Static site: vanilla JS, [Vite](https://vitejs.dev/),
 [Leaflet](https://leafletjs.com/). The exterior-ballistics engine,
 [js-ballistics](https://github.com/o-murphy/js-ballistics) (C++ compiled to
-WebAssembly), runs in the 30-minute cron — not the browser. Visitors only fetch
+WebAssembly), runs in the hourly cron rather than the browser. Visitors only fetch
 the pre-computed `public/impacts.json`; see [How it works](#how-it-works) below.
 
 ## How it works
 
 Nothing is computed in the visitor's browser. A GitHub Actions cron fires the
-fixed gun laying through live weather every 30 minutes, runs the ballistics and
+fixed gun laying through live weather every hour, runs the ballistics and
 the Claude vision describer server-side, and bakes the result into
 `public/impacts.json`. The page just fetches that file.
 
 ```mermaid
 flowchart TD
     IN["Live inputs: weather, tide, elevation, ensemble<br/>Fixed inputs: gun laying, DEM tile"]
-    CRON["GitHub Actions cron, every 30 min<br/>fire-the-guns.yml"]
+    CRON["GitHub Actions cron, hourly<br/>fire-the-guns.yml"]
     BAL["Ballistics, js-ballistics WASM<br/>impact point + CEP ellipse"]
     AI["Claude vision reads the rendered map<br/>writes the one-line description"]
     OUT[["public/impacts.json<br/>committed + pushed to main"]]
@@ -76,7 +76,7 @@ flowchart TD
         DEMT["EA LIDAR DEM tile<br/>public/dem/london-gateway.bin"]
     end
 
-    CRON(["GitHub Actions cron, every 30 min<br/>fire-the-guns.yml runs log-impact.mjs"])
+    CRON(["GitHub Actions cron, hourly<br/>fire-the-guns.yml runs log-impact.mjs"])
     SRC --> CRON
     FIXED --> CRON
 
@@ -139,7 +139,7 @@ artifacts the browser reads.
 
 The headline line (*"Mill Hill Golf Course, somewhere around the 15th hole."*)
 is written by a Claude vision model reading the rendered impact map. It runs
-once per 30-minute cron tick on GitHub Actions and is baked into
+once per hourly cron tick on GitHub Actions and is baked into
 `public/impacts.json`, so visitors never trigger an API call and the key
 never reaches the browser.
 

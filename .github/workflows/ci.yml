@@ -3,7 +3,7 @@ name: CI
 on:
   push:
     branches: [main]
-    # log-impact cron churns public/impacts.json every 30 min; nothing in there
+    # log-impact cron churns public/impacts.json every hour; nothing in there
     # changes code or tests, so skip CI for those commits (deploy still runs).
     paths-ignore:
       - 'public/impacts.json'

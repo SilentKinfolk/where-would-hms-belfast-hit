@@ -123,7 +123,7 @@ export function createMap(elementId) {
     if (!show || !entries || entries.length === 0) return;
 
     // The trail comes from the cron-written impacts.json — its latest entry is
-    // up to 30 min old and distinct from the browser's live point, so render
+    // up to an hour old and distinct from the browser's live point, so render
     // every entry as a ghost (no slicing).
     const ghosts = entries;
 

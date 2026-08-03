@@ -1,14 +1,14 @@
 name: Fire the guns
 
-# Every 30 minutes: re-run the engine server-side with live weather and append
+# Every hour: re-run the engine server-side with live weather and append
 # one entry to public/impacts.json. The site fetches that file as the shared
 # ghost trail, so all visitors see the same history regardless of browser.
 
 on:
   schedule:
-    # Off-hour minutes (7 and 37) to dodge the on-the-hour stampede that gets
-    # GH Actions scheduled runs deprioritised and routinely delayed/skipped.
-    - cron: '7,37 * * * *'
+    # Off-hour minute (37) to dodge the on-the-hour stampede that gets GH
+    # Actions scheduled runs deprioritised and routinely delayed/skipped.
+    - cron: '37 * * * *'
   workflow_dispatch:
 
 permissions:
