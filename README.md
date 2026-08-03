@@ -152,41 +152,53 @@ npm run dev                                  # Vite forwards /api/* to it
 
 ## Keeping itself patched
 
-The site is meant to sit unattended for years, so dependency maintenance runs
-without a human in the loop. Three pieces cover it.
+The site is meant to sit unattended for years, so routine dependency maintenance
+runs without a human in the loop.
 
-Dependabot proposes updates weekly and immediately for anything with a security
-advisory, configured in [`.github/dependabot.yml`](.github/dependabot.yml).
+Dependabot proposes updates weekly, and immediately for anything carrying a
+security advisory, configured in [`.github/dependabot.yml`](.github/dependabot.yml).
 `dependabot-automerge.yml` then merges whatever passes CI, majors included, and
 dispatches the Pages deploy. It waits on CI through `workflow_run` rather than
 using GitHub's native auto-merge, because main carries no branch protection on
 purpose: `fire-the-guns.yml` pushes `impacts.json` straight to main every hour
 and a required-checks rule would block that push.
 
-`security-autopatch.yml` covers the case Dependabot structurally cannot.
-Dependabot bumps what `package.json` declares, so a vulnerable package arriving
-through a dependency that pins it exactly has nothing to bump and its advisory
-stays open indefinitely. That is the `sharp` situation: `staticmaps` pins
-`"sharp": "0.33.2"`, its latest release still does, and GHSA-f88m-g3jw-g9cj sat
-open until the pin was forced. The forcing move is a direct dependency plus an
-override that references it:
+Because merges land unreviewed, CI has to cover the code paths that only ever
+run in the cron. `tests/image-pipeline.test.js` exists for that reason: `sharp`
+runs solely inside `renderOgImage()`, so a bad resolution would otherwise
+surface as a silent cron failure hours later instead of a red build.
+
+### The one case that still needs hands
+
+Dependabot updates what `package.json` declares. A vulnerable package arriving
+through a dependency that pins it *exactly* therefore has nothing to bump, and
+its advisory stays open indefinitely. `sharp` is the live example: `staticmaps`
+pins `"sharp": "0.33.2"`, its latest release still does, and GHSA-f88m-g3jw-g9cj
+sat open from 2026-07-21 until the pin was forced by hand.
+
+Forcing it takes a direct dependency plus an override that references it:
 
 ```json
 "dependencies": { "sharp": "^0.35.3" },
 "overrides":    { "sharp": "$sharp" }
 ```
 
-The direct entry is what keeps it autonomous. Dependabot tracks direct
-dependencies, `$sharp` makes the override follow whatever Dependabot bumps that
-entry to, and auto-merge lands the result, so each package needs forcing once.
-[`scripts/auto-patch-security.mjs`](scripts/auto-patch-security.mjs) finds the
-next such package by itself, declines majors, and reverts any batch that fails
-the tests or the build.
+The direct entry is what makes it stick. Dependabot tracks direct dependencies,
+`$sharp` makes the override follow whatever Dependabot bumps that entry to, and
+auto-merge lands the result, so a given package needs this done only once.
 
-Because merges land unreviewed, CI has to cover the code paths that only run in
-the cron. `tests/image-pipeline.test.js` exists for that reason: `sharp` runs
-only inside `renderOgImage()`, so a bad resolution would otherwise surface as a
-silent cron failure hours later instead of a red build.
+Two near-misses are worth recording, both measured against the real tree rather
+than assumed. Declaring `sharp` at the root *without* the override leaves
+staticmaps loading a nested 0.33.2 beside your hoisted copy, and that nested one
+handles the downloaded map tiles. Writing the override as `"*"` resolves to
+0.33.2 as well, since a wildcard is satisfied by the pinned version already
+present. A dist-tag such as `"latest"` does resolve forward, but `npm ci`
+installs whatever the lockfile pins regardless, so it goes stale the moment the
+lockfile stops being regenerated.
+
+Spotting the next package of this shape depends on reading the Dependabot alert.
+Nothing in the toolchain finds it automatically, because Dependabot edits
+declared versions and never adds an override entry.
 
 ## Research this could spawn
 
