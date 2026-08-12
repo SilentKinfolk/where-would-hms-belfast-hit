@@ -12,7 +12,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.115.0",
+    "@anthropic-ai/sdk": "^0.116.0",
     "js-ballistics": "^3.0.0-rc.2",
     "leaflet": "^1.9.4",
     "sharp": "^0.35.3",
@@ -20,7 +20,7 @@
   },
   "devDependencies": {
     "geotiff": "^3.0.5",
-    "vite": "^8.2.0",
+    "vite": "^8.2.1",
     "vitest": "^4.1.10"
   },
   "overrides": {
